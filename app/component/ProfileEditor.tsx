@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@/app/utils/supabase/client';
-import { MapPin, Loader2, X, Globe, Navigation, ChevronDown } from 'lucide-react';
+import { MapPin, ShieldCheck, Loader2, X, Globe, Navigation, ChevronDown } from 'lucide-react';
 
-// --- DATA CONSTANTS ---
+// --- CONSTANTS ---
 const DHAKA_AREAS = [
   "Adabor", "Azimpur", "Badda", "Banani", "Bangshal", "Baridhara", "Basabo", "Bashundhara", 
   "Banasree", "Cantonment", "Chawkbazar", "Dakshinkhan", "Dhanmondi", "Farmgate", 
@@ -27,14 +27,14 @@ export default function ProfileEditor({ onClose, onProfileUpdate, isForced = fal
   const [saving, setSaving] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   
-  // Toggle between GPS Button and Text Input
-  const [isManualLoc, setIsManualLoc] = useState(false); 
+  // Toggle between GPS Button and Manual Selection
+  const [isManualLoc, setIsManualLoc] = useState(false);
 
   const [formData, setFormData] = useState({
     username: '',
     role: 'student',
     primary_area: '', 
-    location: null as string | null,
+    location: null as string | null, // Store geometry string
   });
 
   const [locationStatus, setLocationStatus] = useState<string>('System Idle');
@@ -55,7 +55,7 @@ export default function ProfileEditor({ onClose, onProfileUpdate, isForced = fal
             primary_area: data.primary_area || '',
             location: data.location || null,
           });
-          
+
           // If we have text but no specific GPS point, default to manual view
           if (data.primary_area && !data.location) {
              setIsManualLoc(true);
@@ -72,6 +72,8 @@ export default function ProfileEditor({ onClose, onProfileUpdate, isForced = fal
     
     navigator.geolocation.getCurrentPosition(async (pos) => {
       const { latitude, longitude } = pos.coords;
+      
+      // Format for PostGIS Geometry (Longitude first, then Latitude)
       const point = `POINT(${longitude} ${latitude})`; 
 
       try {
@@ -81,11 +83,25 @@ export default function ProfileEditor({ onClose, onProfileUpdate, isForced = fal
           body: JSON.stringify({ lat: latitude, lng: longitude })
         });
         const data = await res.json();
-        const zone = data.zone || 'Unknown Zone';
+        const zone = data.zone || 'Unknown';
 
+        // Save the point to state
         setFormData(p => ({ ...p, primary_area: zone, location: point }));
         setLocationStatus(`✅ ${zone}`);
 
+        // Sync to Profiles + Role Table immediately
+        if (userId) {
+          // Update generic profile
+          await supabase.from('profiles').update({ location: point, primary_area: zone }).eq('id', userId);
+          
+          // Update specific role table with Geometry
+          const table = formData.role === 'tutor' ? 'tutors' : 'students';
+          await supabase.from(table).upsert({ 
+            id: userId, 
+            location: point, 
+            primary_area: zone 
+          });
+        }
       } catch (e) { setLocationStatus('❌ AI ERROR'); }
     });
   };
@@ -114,12 +130,12 @@ export default function ProfileEditor({ onClose, onProfileUpdate, isForced = fal
       });
       if (pErr) throw pErr;
 
-      // 2. Initialize Role Table
+      // 2. Initialize Role Table (Ensure row exists)
       const table = formData.role === 'tutor' ? 'tutors' : 'students';
       
       const rolePayload: any = { id: userId, primary_area: formData.primary_area };
       if (formData.location) {
-        rolePayload.location = formData.location;
+        rolePayload.location = formData.location; // PostGIS expects 'POINT(lng lat)'
       }
 
       await supabase.from(table).upsert(rolePayload);
@@ -143,12 +159,7 @@ export default function ProfileEditor({ onClose, onProfileUpdate, isForced = fal
       <div className="space-y-5">
         <div>
           <label className="text-[10px] font-mono text-zinc-500 uppercase">Handle</label>
-          <input 
-            value={formData.username} 
-            onChange={e => setFormData({...formData, username: e.target.value})} 
-            className="w-full bg-black border border-white/10 rounded-xl p-3 text-white outline-none focus:border-emerald-500 transition-colors" 
-            placeholder="Enter alias..."
-          />
+          <input value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} className="w-full bg-black border border-white/10 rounded-xl p-3 text-white outline-none focus:border-emerald-500" />
         </div>
 
         <div>
@@ -177,7 +188,7 @@ export default function ProfileEditor({ onClose, onProfileUpdate, isForced = fal
                 <Globe className="absolute left-3 top-3.5 text-zinc-600 group-focus-within:text-emerald-500 transition-colors" size={14} />
                 <ChevronDown className="absolute right-3 top-3.5 text-zinc-600 pointer-events-none" size={14} />
                 
-                {/* 👇 MODIFIED: INPUT WITH DATALIST */}
+                {/* Manual Selection with Datalist */}
                 <input 
                    list="dhaka-areas-list"
                    value={formData.primary_area} 
@@ -196,7 +207,7 @@ export default function ProfileEditor({ onClose, onProfileUpdate, isForced = fal
              <>
                <button onClick={handleUpdateLocation} className="w-full py-3 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded-xl text-[10px] font-bold tracking-widest hover:bg-emerald-500 hover:text-black transition-all flex items-center justify-center gap-2 group">
                  <MapPin size={14} className="group-hover:animate-bounce" /> 
-                 {formData.primary_area || 'INITIATE GPS SYNC'}
+                 {formData.primary_area || 'SYNC GPS'}
                </button>
                <p className="text-[9px] text-center mt-2 text-zinc-600 font-mono">{locationStatus}</p>
              </>

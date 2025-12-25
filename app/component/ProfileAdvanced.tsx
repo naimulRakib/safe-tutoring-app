@@ -20,6 +20,25 @@ const DHAKA_AREAS = [
   "Shyampur", "Sutrapur", "Tejgaon", "Uttara", "Uttar Khan", "Vatara", "Wari", "Burichang"
 ];
 
+const ACADEMIC_CLASSES = [
+  "Class 1", "Class 2", "Class 3", "Class 4", "Class 5", 
+  "Class 6", "Class 7", "Class 8", "Class 9", "SSC Candidate", 
+  "HSC Candidate", "O-Level", "A-Level", "Admission Test"
+];
+
+const SUBJECT_LIST = [
+  "Bangla", "English", "Math", "Physics", "Chemistry", 
+  "Biology", "General Science", "ICT", "Accounting", "Economics", "Higher Math"
+];
+
+// --- HELPER TO FIX SPLIT ERROR ---
+// This safely converts any input (String or Array) into a clean Array
+const safeSplit = (input: any): string[] => {
+  if (!input) return [];
+  if (Array.isArray(input)) return input.map(String);
+  return String(input).split(',').map(s => s.trim()).filter(Boolean);
+};
+
 // --- LAYOUT HELPER ---
 const Row = ({ label, children }: { label: string, children: React.ReactNode }) => (
   <div className="grid grid-cols-[110px_1fr] items-center gap-4 py-1.5">
@@ -40,7 +59,7 @@ export default function ProfileAdvanced({ onClose, role: propRole }: ProfileAdva
   // 🎓 STUDENT STATE
   // ==========================================
   const [studentBasic, setStudentBasic] = useState({ full_name: '', institution: '', class_level: '', age: '', gender: 'Any', mobile: '' });
-  const [studentTuition, setStudentTuition] = useState({ subjects: '', salary_min: '', salary_max: '', days_per_week: '', work_hours: '' });
+  const [studentTuition, setStudentTuition] = useState<any>({ subjects: '', salary_min: '', salary_max: '', days_per_week: '', work_hours: '' });
   const [studentPriority, setStudentPriority] = useState({ tutor_gender: 'Any', preferred_institution: '', other_requirements: '' });
   const [studentCourse, setStudentCourse] = useState({ active: false, topic: '', duration: '', offer_price: '', details: '' });
   
@@ -54,8 +73,7 @@ export default function ProfileAdvanced({ onClose, role: propRole }: ProfileAdva
   // ==========================================
   const [tutorBasic, setTutorBasic] = useState({ full_name: '', age: '', edu_level: '', institution: '', occupation: '', mobile: '', current_address: '' });
   
-  // ✅ UPDATED: Added preferred_area and optional_areas to state
-  const [tutorTeaching, setTutorTeaching] = useState({ 
+  const [tutorTeaching, setTutorTeaching] = useState<any>({ 
     class_pref: '', 
     subject_pref: '', 
     days_per_week: '', 
@@ -63,8 +81,8 @@ export default function ProfileAdvanced({ onClose, role: propRole }: ProfileAdva
     gender_pref: 'Any', 
     salary_min: '', 
     salary_max: '',
-    preferred_area: '', // Main Area
-    optional_areas: [] as string[] // Secondary Areas
+    preferred_area: '', 
+    optional_areas: [] as string[] 
   });
 
   const [tutorCourse, setTutorCourse] = useState({ active: false, title: '', duration: '', price: '', details: '' });
@@ -88,28 +106,30 @@ export default function ProfileAdvanced({ onClose, role: propRole }: ProfileAdva
         }
         setCurrentRole(activeRole || null);
 
-        if (activeRole === 'student') {
+       if (activeRole === 'student') {
           const { data: s } = await supabase.from('students').select('*').eq('id', user.id).maybeSingle();
           if (s) {
-            if (s.basic_info) setStudentBasic(prev => ({ ...prev, ...s.basic_info }));
-            if (s.tuition_details) setStudentTuition(prev => ({ ...prev, ...s.tuition_details }));
-            if (s.tutor_priority) setStudentPriority(prev => ({ ...prev, ...s.tutor_priority }));
+            // 👇 FIXED: Added 'as any' to prevent type conflicts
+            if (s.basic_info) setStudentBasic((prev: any) => ({ ...prev, ...s.basic_info }));
+            if (s.tuition_details) setStudentTuition((prev: any) => ({ ...prev, ...s.tuition_details }));
+            if (s.tutor_priority) setStudentPriority((prev: any) => ({ ...prev, ...s.tutor_priority }));
+            
             if (s.custom_course_plan) setStudentCourse({ active: true, ...s.custom_course_plan });
+            
             if (s.verification) setStudentFiles({ 
                 id_card_url: s.verification.id_card_url || '',
                 id_card_details: s.verification.id_card_details || null
             });
           }
-        } 
+        }
         else if (activeRole === 'tutor') {
           const { data: t } = await supabase.from('tutors').select('*').eq('id', user.id).maybeSingle();
           if (t) {
             if (t.basic_info) setTutorBasic(prev => ({ ...prev, ...t.basic_info }));
             if (t.teaching_details) {
-                setTutorTeaching(prev => ({ 
+                setTutorTeaching((prev:any) => ({ 
                     ...prev, 
                     ...t.teaching_details,
-                    // Ensure arrays are initialized if missing in DB
                     optional_areas: t.teaching_details.optional_areas || [] 
                 }));
             }
@@ -132,23 +152,54 @@ export default function ProfileAdvanced({ onClose, role: propRole }: ProfileAdva
     loadData();
   }, [supabase, propRole]);
 
-  // --- HELPER: ADD OPTIONAL AREA ---
+  // --- HELPERS ---
   const addOptionalArea = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const area = e.target.value;
     if (area && !tutorTeaching.optional_areas.includes(area) && area !== tutorTeaching.preferred_area) {
-        setTutorTeaching(prev => ({
+        setTutorTeaching((prev:any) => ({
             ...prev,
             optional_areas: [...prev.optional_areas, area]
         }));
     }
-    e.target.value = ""; // Reset select
+    e.target.value = ""; 
   };
 
   const removeOptionalArea = (area: string) => {
-    setTutorTeaching(prev => ({
+    setTutorTeaching((prev:any) => ({
         ...prev,
-        optional_areas: prev.optional_areas.filter(a => a !== area)
+        optional_areas: prev.optional_areas.filter((a: string) => a !== area)
     }));
+  };
+
+  // ✅ SAFE ADD/REMOVE SUBJECTS (Uses safeSplit)
+  const addStudentSubject = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const sub = e.target.value;
+    if(!sub) return;
+    const currentList = safeSplit(studentTuition.subjects);
+    if(!currentList.includes(sub)) {
+        setStudentTuition((prev:any) => ({ ...prev, subjects: [...currentList, sub].join(', ') }));
+    }
+    e.target.value = "";
+  };
+
+  const removeStudentSubject = (sub: string) => {
+    const currentList = safeSplit(studentTuition.subjects);
+    setStudentTuition((prev:any) => ({ ...prev, subjects: currentList.filter(s => s !== sub).join(', ') }));
+  };
+
+  const addTutorSubject = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const sub = e.target.value;
+    if(!sub) return;
+    const currentList = safeSplit(tutorTeaching.subject_pref);
+    if(!currentList.includes(sub)) {
+        setTutorTeaching((prev:any) => ({ ...prev, subject_pref: [...currentList, sub].join(', ') }));
+    }
+    e.target.value = "";
+  };
+
+  const removeTutorSubject = (sub: string) => {
+    const currentList = safeSplit(tutorTeaching.subject_pref);
+    setTutorTeaching((prev:any) => ({ ...prev, subject_pref: currentList.filter(s => s !== sub).join(', ') }));
   };
 
   // --- FILE UPLOAD ---
@@ -212,10 +263,8 @@ export default function ProfileAdvanced({ onClose, role: propRole }: ProfileAdva
           basic_info: { ...studentBasic, age: parseInt(studentBasic.age) || 0 },
           tuition_details: {
             ...studentTuition,
-subjects: (Array.isArray(studentTuition.subjects) 
-              ? studentTuition.subjects 
-              : (studentTuition.subjects || '').split(',')
-            ).map((s: any) => String(s).trim()).filter(Boolean),
+            // Ensure array consistency
+            subjects: safeSplit(studentTuition.subjects), 
             salary_min: parseInt(studentTuition.salary_min) || 0,
             salary_max: parseInt(studentTuition.salary_max) || 0,
             days_per_week: parseInt(studentTuition.days_per_week) || 0,
@@ -235,7 +284,8 @@ subjects: (Array.isArray(studentTuition.subjects)
           id: userId,
           basic_info: { ...tutorBasic, age: parseInt(tutorBasic.age) || 0 },
           teaching_details: { 
-             ...tutorTeaching, 
+             ...tutorTeaching,
+             subject_pref: safeSplit(tutorTeaching.subject_pref).join(', '), // Keep as comma-string if tutor table expects it, or array if not
              days_per_week: parseInt(tutorTeaching.days_per_week) || 0,
              hours_per_day: parseFloat(tutorTeaching.hours_per_day) || 0,
              salary_min: parseInt(tutorTeaching.salary_min) || 0,
@@ -298,14 +348,37 @@ subjects: (Array.isArray(studentTuition.subjects)
               </Row>
               <Row label="Mobile"><input value={studentBasic.mobile} onChange={e => setStudentBasic({...studentBasic, mobile: e.target.value})} className="input-dark" placeholder="+880..." /></Row>
               <Row label="Institution"><input value={studentBasic.institution} onChange={e => setStudentBasic({...studentBasic, institution: e.target.value})} className="input-dark" placeholder="School/College Name" /></Row>
-              <Row label="Class Level"><input value={studentBasic.class_level} onChange={e => setStudentBasic({...studentBasic, class_level: e.target.value})} className="input-dark" placeholder="Class 10 / A-Level" /></Row>
+              
+              {/* ✅ Student Class Dropdown */}
+              <Row label="Class Level">
+                <select value={studentBasic.class_level} onChange={e => setStudentBasic({...studentBasic, class_level: e.target.value})} className="input-dark">
+                    <option value="">Select Class</option>
+                    {ACADEMIC_CLASSES.map(cls => <option key={cls} value={cls}>{cls}</option>)}
+                </select>
+              </Row>
             </div>
           </section>
 
           <section>
             <h3 className="text-xs font-bold text-blue-500 mb-4 flex items-center gap-2 border-b border-blue-500/20 pb-1 w-fit"><BookOpen size={14}/> TUITION NEEDS</h3>
             <div className="space-y-1">
-              <Row label="Subjects"><input value={studentTuition.subjects} onChange={e => setStudentTuition({...studentTuition, subjects: e.target.value})} className="input-dark" placeholder="Math, Physics" /></Row>
+              {/* ✅ Student Subjects (Multi-select) using SafeSplit */}
+              <Row label="Subjects">
+                <div className="w-full">
+                    <select onChange={addStudentSubject} className="input-dark mb-2">
+                        <option value="">+ Add Subject</option>
+                        {SUBJECT_LIST.map(sub => <option key={sub} value={sub}>{sub}</option>)}
+                    </select>
+                    <div className="flex flex-wrap gap-2">
+                        {/* 👇 FIXED: Uses safeSplit() to prevent errors */}
+                        {safeSplit(studentTuition.subjects).map((sub: string, idx: number) => (
+                            <span key={idx} className="bg-blue-900/30 text-blue-300 text-[10px] px-2 py-1 rounded flex items-center gap-1 border border-blue-800">
+                                {sub} <button onClick={() => removeStudentSubject(sub)} className="hover:text-red-400"><X size={10} /></button>
+                            </span>
+                        ))}
+                    </div>
+                </div>
+              </Row>
               <Row label="Budget (Tk)">
                 <div className="flex gap-2 items-center"><input type="number" value={studentTuition.salary_min} onChange={e => setStudentTuition({...studentTuition, salary_min: e.target.value})} className="input-dark w-1/2" placeholder="Min" /><input type="number" value={studentTuition.salary_max} onChange={e => setStudentTuition({...studentTuition, salary_max: e.target.value})} className="input-dark w-1/2" placeholder="Max" /></div>
               </Row>
@@ -387,8 +460,32 @@ subjects: (Array.isArray(studentTuition.subjects)
           <section>
             <h3 className="text-xs font-bold text-purple-500 mb-4 flex items-center gap-2 border-b border-purple-500/20 pb-1 w-fit"><BookOpen size={14}/> TEACHING PREFERENCES</h3>
             <div className="space-y-1">
-              <Row label="Subjects"><input value={tutorTeaching.subject_pref} onChange={e => setTutorTeaching({...tutorTeaching, subject_pref: e.target.value})} className="input-dark" /></Row>
-              <Row label="Class Pref"><input value={tutorTeaching.class_pref} onChange={e => setTutorTeaching({...tutorTeaching, class_pref: e.target.value})} className="input-dark" /></Row>
+              {/* ✅ Tutor Subjects (Multi-select) using SafeSplit */}
+              <Row label="Subjects">
+                <div className="w-full">
+                    <select onChange={addTutorSubject} className="input-dark mb-2">
+                        <option value="">+ Add Subject</option>
+                        {SUBJECT_LIST.map(sub => <option key={sub} value={sub}>{sub}</option>)}
+                    </select>
+                    <div className="flex flex-wrap gap-2">
+                         {/* 👇 FIXED: Uses safeSplit() here too */}
+                        {safeSplit(tutorTeaching.subject_pref).map((sub: string, idx: number) => (
+                            <span key={idx} className="bg-purple-900/30 text-purple-300 text-[10px] px-2 py-1 rounded flex items-center gap-1 border border-purple-800">
+                                {sub} <button onClick={() => removeTutorSubject(sub)} className="hover:text-red-400"><X size={10} /></button>
+                            </span>
+                        ))}
+                    </div>
+                </div>
+              </Row>
+              
+              {/* ✅ Tutor Class Preference (Dropdown) */}
+              <Row label="Class Pref">
+                <select value={tutorTeaching.class_pref} onChange={e => setTutorTeaching({...tutorTeaching, class_pref: e.target.value})} className="input-dark">
+                    <option value="">Select Class Preference</option>
+                    <option value="All Classes">All Classes</option>
+                    {ACADEMIC_CLASSES.map(cls => <option key={cls} value={cls}>{cls}</option>)}
+                </select>
+              </Row>
               <Row label="Schedule"><div className="flex gap-2"><input value={tutorTeaching.days_per_week} onChange={e => setTutorTeaching({...tutorTeaching, days_per_week: e.target.value})} className="input-dark w-1/2" placeholder="Days/Wk" type="number"/><input value={tutorTeaching.hours_per_day} onChange={e => setTutorTeaching({...tutorTeaching, hours_per_day: e.target.value})} className="input-dark w-1/2" placeholder="Hrs/Day" type="number"/></div></Row>
               <Row label="Expected Pay"><div className="flex gap-2 items-center"><input value={tutorTeaching.salary_min} onChange={e => setTutorTeaching({...tutorTeaching, salary_min: e.target.value})} className="input-dark w-1/2" placeholder="Min" type="number"/><span className="text-zinc-600">-</span><input value={tutorTeaching.salary_max} onChange={e => setTutorTeaching({...tutorTeaching, salary_max: e.target.value})} className="input-dark w-1/2" placeholder="Max" type="number"/></div></Row>
             </div>
@@ -420,7 +517,7 @@ subjects: (Array.isArray(studentTuition.subjects)
               </select>
               
               <div className="flex flex-wrap gap-2">
-                {tutorTeaching.optional_areas?.map((area, idx) => (
+                {tutorTeaching.optional_areas?.map((area: string, idx: number) => (
                   <span key={idx} className="bg-zinc-800 text-zinc-300 text-[10px] px-2 py-1 rounded flex items-center gap-1 border border-zinc-700">
                     {area} <button onClick={() => removeOptionalArea(area)} className="hover:text-red-400"><X size={10} /></button>
                   </span>
