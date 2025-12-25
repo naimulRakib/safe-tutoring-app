@@ -1,3 +1,6 @@
+// 👇 This line fixes the "Prerender Error" during build
+// export const dynamic = 'force-dynamic';
+
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
@@ -9,11 +12,14 @@ import {
   LogOut, 
   RefreshCw, 
   User as UserIcon, 
+  CheckCircle, // Added Icon
+  GraduationCap // Added Icon
 } from 'lucide-react'; 
 
 // --- COMPONENTS KEPT ---
 import ProfileEditor from '@/app/component/ProfileEditor';
 import ProfileAdvanced from '@/app/component/ProfileAdvanced';
+import VarsityVerification from '@/app/component/VarsityVerifications'; // Added Component
 
 // Dynamic Map
 const MapDisplay = dynamicImport(() => import('@/app/component/MapDisplay'), { 
@@ -37,6 +43,7 @@ export default function DashboardPage() {
   // --- UI MODALS ---
   const [showBasicEdit, setShowBasicEdit] = useState(false);
   const [showAdvancedEdit, setShowAdvancedEdit] = useState(false);
+  const [showVarsityVerify, setShowVarsityVerify] = useState(false); // Added State
 
   // --- MAP STATE ---
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
@@ -61,11 +68,26 @@ export default function DashboardPage() {
 
       if (profileError) throw profileError;
 
-      setProfile(profileData);
+      // Fetch tutor specific data for verification status
+      let tutorData = null;
+      if (profileData?.role === 'tutor') {
+        const { data: tData } = await supabase
+          .from('tutors')
+          .select('varsity_verified')
+          .eq('id', user.id)
+          .maybeSingle();
+        tutorData = tData;
+      }
+
+      const completeProfile = { ...profileData, ...tutorData };
+      setProfile(completeProfile);
       
       // Trigger First-Time Setup if role is missing
       if (!profileData || !profileData.role || profileData.role === 'stranger') {
         setShowBasicEdit(true);
+      } else if (profileData.role === 'tutor' && !tutorData?.varsity_verified) {
+        // Optional: Auto-open verification for unverified tutors
+        // setShowVarsityVerify(true); 
       } else {
         setShowBasicEdit(false);
       }
@@ -87,8 +109,12 @@ export default function DashboardPage() {
   const handleProfileUpdate = (newRole: string) => {
       setProfile((prev: any) => ({ ...prev, role: newRole }));
       setShowBasicEdit(false);
-      // Open advanced editor after basic is done
-      setTimeout(() => setShowAdvancedEdit(true), 500);
+      if (newRole === 'tutor') {
+        setShowVarsityVerify(true);
+      } else {
+        // Open advanced editor after basic is done for students
+        setTimeout(() => setShowAdvancedEdit(true), 500);
+      }
   };
 
   const handleLogout = async () => {
@@ -136,6 +162,21 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* 3. VARSITY VERIFICATION (New Modal) */}
+      {showVarsityVerify && profile?.role === 'tutor' && (
+        <div className="absolute inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="relative">
+             <button 
+                onClick={() => setShowVarsityVerify(false)}
+                className="absolute -top-10 right-0 text-white/50 hover:text-white text-sm flex items-center gap-1"
+             >
+               Skip for now <LogOut size={12}/>
+             </button>
+             <VarsityVerification tutorId={profile.id} />
+          </div>
+        </div>
+      )}
+
       {/* --- HEADER --- */}
       <header className="p-4 border-b border-white/10 bg-black/60 backdrop-blur-md z-10 flex justify-between items-center shadow-2xl">
         <div className="flex items-center gap-5">
@@ -161,6 +202,21 @@ export default function DashboardPage() {
         </div>
         
         <div className="flex gap-2">
+          
+          {/* VARSITY VERIFICATION BUTTON (Only for Tutors) */}
+          {!isStudent && (
+             <button
+               onClick={() => setShowVarsityVerify(true)}
+               className={`px-3 py-1.5 rounded-lg border text-[10px] font-bold flex items-center gap-2 transition-all
+                 ${profile?.varsity_verified 
+                    ? 'bg-green-900/20 border-green-500/30 text-green-400 hover:bg-green-900/30' 
+                    : 'bg-yellow-900/20 border-yellow-500/30 text-yellow-400 animate-pulse hover:bg-yellow-900/30'}`}
+             >
+               {profile?.varsity_verified ? <CheckCircle size={12} /> : <GraduationCap size={12} />}
+               {profile?.varsity_verified ? 'VERIFIED' : 'VERIFY VARSITY'}
+             </button>
+          )}
+
           {/* ADVANCED INFO */}
           <button 
             onClick={() => setShowAdvancedEdit(true)} 
