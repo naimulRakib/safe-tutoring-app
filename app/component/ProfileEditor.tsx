@@ -2,7 +2,18 @@
 
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@/app/utils/supabase/client';
-import { MapPin, ShieldCheck, Loader2, X } from 'lucide-react';
+import { MapPin, Loader2, X, Globe, Navigation, ChevronDown } from 'lucide-react';
+
+// --- DATA CONSTANTS ---
+const DHAKA_AREAS = [
+  "Adabor", "Azimpur", "Badda", "Banani", "Bangshal", "Baridhara", "Basabo", "Bashundhara", 
+  "Banasree", "Cantonment", "Chawkbazar", "Dakshinkhan", "Dhanmondi", "Farmgate", 
+  "Gulshan 1", "Gulshan 2", "Hazaribagh", "Jatrabari", "Kafrul", "Kamrangirchar", 
+  "Khilgaon", "Khilkhet", "Kotwali", "Lalbagh", "Mirpur 1", "Mirpur 10", "Mirpur 11", 
+  "Mirpur 12", "Mirpur 14", "Mohakhali", "Mohammadpur", "Motijheel", "New Market", 
+  "Pallabi", "Paltan", "Ramna", "Rampura", "Sabujbagh", "Shahbagh", "Sher-e-Bangla Nagar", 
+  "Shyampur", "Sutrapur", "Tejgaon", "Uttara", "Uttar Khan", "Vatara", "Wari", "Burichang"
+];
 
 interface ProfileEditorProps {
   onClose: () => void;
@@ -16,11 +27,14 @@ export default function ProfileEditor({ onClose, onProfileUpdate, isForced = fal
   const [saving, setSaving] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   
+  // Toggle between GPS Button and Text Input
+  const [isManualLoc, setIsManualLoc] = useState(false); 
+
   const [formData, setFormData] = useState({
     username: '',
     role: 'student',
     primary_area: '', 
-    location: null as string | null, // <--- ADDED: Store the geometry string here
+    location: null as string | null,
   });
 
   const [locationStatus, setLocationStatus] = useState<string>('System Idle');
@@ -39,8 +53,13 @@ export default function ProfileEditor({ onClose, onProfileUpdate, isForced = fal
             username: data.username || '',
             role: (data.role === 'stranger' || !data.role) ? 'student' : data.role,
             primary_area: data.primary_area || '',
-            location: data.location || null, // <--- ADDED: Load existing geometry if available
+            location: data.location || null,
           });
+          
+          // If we have text but no specific GPS point, default to manual view
+          if (data.primary_area && !data.location) {
+             setIsManualLoc(true);
+          }
         }
       } catch (e) { console.error(e); } finally { setLoading(false); }
     }
@@ -53,8 +72,6 @@ export default function ProfileEditor({ onClose, onProfileUpdate, isForced = fal
     
     navigator.geolocation.getCurrentPosition(async (pos) => {
       const { latitude, longitude } = pos.coords;
-      
-      // <--- MODIFIED: Format for PostGIS Geometry (Longitude first, then Latitude)
       const point = `POINT(${longitude} ${latitude})`; 
 
       try {
@@ -64,27 +81,22 @@ export default function ProfileEditor({ onClose, onProfileUpdate, isForced = fal
           body: JSON.stringify({ lat: latitude, lng: longitude })
         });
         const data = await res.json();
-        const zone = data.zone || 'Unknown';
+        const zone = data.zone || 'Unknown Zone';
 
-        // <--- MODIFIED: Save the point to state so handleSave can access it later
         setFormData(p => ({ ...p, primary_area: zone, location: point }));
         setLocationStatus(`✅ ${zone}`);
 
-        // Sync to Profiles + Role Table immediately
-        if (userId) {
-          // Update generic profile
-          await supabase.from('profiles').update({ location: point, primary_area: zone }).eq('id', userId);
-          
-          // Update specific role table with Geometry
-          const table = formData.role === 'tutor' ? 'tutors' : 'students';
-          await supabase.from(table).upsert({ 
-            id: userId, 
-            location: point, // <--- Passing the Geometry string
-            primary_area: zone 
-          });
-        }
       } catch (e) { setLocationStatus('❌ AI ERROR'); }
     });
+  };
+
+  const handleManualLocationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+     // When typing manually, we update the text, but we must clear the precise GPS point
+     setFormData({
+        ...formData, 
+        primary_area: e.target.value,
+        location: null 
+     });
   };
 
   const handleSave = async () => {
@@ -97,18 +109,17 @@ export default function ProfileEditor({ onClose, onProfileUpdate, isForced = fal
         username: formData.username,
         role: formData.role,
         primary_area: formData.primary_area,
-        location: formData.location, // <--- ADDED: Persist location to profile
+        location: formData.location, 
         is_online: true
       });
       if (pErr) throw pErr;
 
-      // 2. Initialize Role Table (Ensure row exists)
+      // 2. Initialize Role Table
       const table = formData.role === 'tutor' ? 'tutors' : 'students';
       
-      // <--- MODIFIED: Construct payload to include Geometry if we have it
       const rolePayload: any = { id: userId, primary_area: formData.primary_area };
       if (formData.location) {
-        rolePayload.location = formData.location; // PostGIS expects 'POINT(lng lat)'
+        rolePayload.location = formData.location;
       }
 
       await supabase.from(table).upsert(rolePayload);
@@ -132,7 +143,12 @@ export default function ProfileEditor({ onClose, onProfileUpdate, isForced = fal
       <div className="space-y-5">
         <div>
           <label className="text-[10px] font-mono text-zinc-500 uppercase">Handle</label>
-          <input value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} className="w-full bg-black border border-white/10 rounded-xl p-3 text-white outline-none focus:border-emerald-500" />
+          <input 
+            value={formData.username} 
+            onChange={e => setFormData({...formData, username: e.target.value})} 
+            className="w-full bg-black border border-white/10 rounded-xl p-3 text-white outline-none focus:border-emerald-500 transition-colors" 
+            placeholder="Enter alias..."
+          />
         </div>
 
         <div>
@@ -144,13 +160,50 @@ export default function ProfileEditor({ onClose, onProfileUpdate, isForced = fal
         </div>
 
         <div className="pt-4 border-t border-white/5">
-          <button onClick={handleUpdateLocation} className="w-full py-3 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded-xl text-[10px] font-bold tracking-widest hover:bg-emerald-500 hover:text-black transition-all flex items-center justify-center gap-2">
-            <MapPin size={14} /> {formData.primary_area || 'SYNC GPS'}
-          </button>
-          <p className="text-[9px] text-center mt-2 text-zinc-600 font-mono">{locationStatus}</p>
+          {/* Header with Switcher */}
+          <div className="flex justify-between items-center mb-2">
+            <label className="text-[10px] font-mono text-zinc-500 uppercase">Operational Zone</label>
+            <button 
+              onClick={() => setIsManualLoc(!isManualLoc)} 
+              className="text-[9px] font-bold text-emerald-500 hover:text-emerald-400 uppercase tracking-wider flex items-center gap-1"
+            >
+              {isManualLoc ? <><Navigation size={10}/> Switch to Auto GPS</> : <><Globe size={10}/> Switch to Manual</>}
+            </button>
+          </div>
+          
+          {/* Conditional Input */}
+          {isManualLoc ? (
+             <div className="relative group">
+                <Globe className="absolute left-3 top-3.5 text-zinc-600 group-focus-within:text-emerald-500 transition-colors" size={14} />
+                <ChevronDown className="absolute right-3 top-3.5 text-zinc-600 pointer-events-none" size={14} />
+                
+                {/* 👇 MODIFIED: INPUT WITH DATALIST */}
+                <input 
+                   list="dhaka-areas-list"
+                   value={formData.primary_area} 
+                   onChange={handleManualLocationChange}
+                   className="w-full bg-black border border-white/10 rounded-xl py-3 pl-10 pr-3 text-white outline-none focus:border-emerald-500 placeholder:text-zinc-700 font-mono text-sm"
+                   placeholder="Search Area (e.g. Uttara)"
+                />
+                <datalist id="dhaka-areas-list">
+                    {DHAKA_AREAS.map((area) => (
+                        <option key={area} value={area} />
+                    ))}
+                </datalist>
+
+             </div>
+          ) : (
+             <>
+               <button onClick={handleUpdateLocation} className="w-full py-3 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded-xl text-[10px] font-bold tracking-widest hover:bg-emerald-500 hover:text-black transition-all flex items-center justify-center gap-2 group">
+                 <MapPin size={14} className="group-hover:animate-bounce" /> 
+                 {formData.primary_area || 'INITIATE GPS SYNC'}
+               </button>
+               <p className="text-[9px] text-center mt-2 text-zinc-600 font-mono">{locationStatus}</p>
+             </>
+          )}
         </div>
 
-        <button onClick={handleSave} disabled={saving} className="w-full bg-white text-black font-black py-4 rounded-xl hover:bg-emerald-400 transition-all flex justify-center">
+        <button onClick={handleSave} disabled={saving} className="w-full bg-white text-black font-black py-4 rounded-xl hover:bg-emerald-400 hover:scale-[1.02] transition-all flex justify-center shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:shadow-[0_0_30px_rgba(16,185,129,0.6)]">
           {saving ? <Loader2 className="animate-spin" /> : 'ESTABLISH IDENTITY'}
         </button>
       </div>

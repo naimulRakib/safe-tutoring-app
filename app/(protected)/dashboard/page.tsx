@@ -2,17 +2,29 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation'; 
+import dynamicImport from 'next/dynamic'; 
 import { createClient } from '@/app/utils/supabase/client';
 import { 
   FileText, 
   LogOut, 
   RefreshCw, 
-  User as UserIcon
+  User as UserIcon, 
 } from 'lucide-react'; 
 
 // --- COMPONENTS KEPT ---
 import ProfileEditor from '@/app/component/ProfileEditor';
 import ProfileAdvanced from '@/app/component/ProfileAdvanced';
+
+// Dynamic Map
+const MapDisplay = dynamicImport(() => import('@/app/component/MapDisplay'), { 
+  ssr: false,
+  loading: () => (
+    <div className="h-full w-full bg-[#050505] flex flex-col items-center justify-center text-emerald-500 font-mono">
+      <RefreshCw className="animate-spin mb-2" size={24} />
+      <span className="text-[10px] tracking-[0.3em] uppercase">Initializing Global Map...</span>
+    </div>
+  )
+});
 
 export default function DashboardPage() {
   const supabase = createClient();
@@ -25,6 +37,9 @@ export default function DashboardPage() {
   // --- UI MODALS ---
   const [showBasicEdit, setShowBasicEdit] = useState(false);
   const [showAdvancedEdit, setShowAdvancedEdit] = useState(false);
+
+  // --- MAP STATE ---
+  const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
 
   /**
    * 1. FETCH PROFILE
@@ -48,7 +63,7 @@ export default function DashboardPage() {
 
       setProfile(profileData);
       
-      // Logic to trigger First-Time Setup
+      // Trigger First-Time Setup if role is missing
       if (!profileData || !profileData.role || profileData.role === 'stranger') {
         setShowBasicEdit(true);
       } else {
@@ -72,8 +87,7 @@ export default function DashboardPage() {
   const handleProfileUpdate = (newRole: string) => {
       setProfile((prev: any) => ({ ...prev, role: newRole }));
       setShowBasicEdit(false);
-      
-      // Automatically open Advanced Editor after Basic setup
+      // Open advanced editor after basic is done
       setTimeout(() => setShowAdvancedEdit(true), 500);
   };
 
@@ -89,7 +103,7 @@ export default function DashboardPage() {
         <div className="w-12 h-1 bg-emerald-900 overflow-hidden relative">
           <div className="absolute inset-0 bg-emerald-500 animate-progress"></div>
         </div>
-        <span className="text-[10px] tracking-widest animate-pulse uppercase">Loading_Profile_System...</span>
+        <span className="text-[10px] tracking-widest animate-pulse uppercase">Loading_Geospatial_Data...</span>
       </div>
     );
   }
@@ -99,9 +113,9 @@ export default function DashboardPage() {
   return (
     <div className="h-screen bg-[#050505] flex flex-col text-white font-sans relative overflow-hidden selection:bg-emerald-500 selection:text-black">
       
-      {/* --- MODAL LAYER (Only Profile Editors) --- */}
+      {/* --- MODAL LAYER --- */}
       
-      {/* 1. BASIC IDENTITY EDITOR */}
+      {/* 1. BASIC IDENTITY */}
       {showBasicEdit && (
         <div className="absolute inset-0 z-[9999] bg-black/90 backdrop-blur-xl flex items-center justify-center p-4">
            <ProfileEditor 
@@ -112,7 +126,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* 2. ADVANCED DATA EDITOR */}
+      {/* 2. ADVANCED DATA */}
       {showAdvancedEdit && (
         <div className="absolute inset-0 z-[9999] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
            <ProfileAdvanced 
@@ -127,28 +141,27 @@ export default function DashboardPage() {
         <div className="flex items-center gap-5">
           <div>
             <h1 className={`text-xl font-black tracking-tighter transition-all duration-500 ${isStudent ? 'text-emerald-400' : 'text-cyan-400'}`}>
-              PROFILE MANAGER
+              {isStudent ? 'STUDENT RADAR' : 'TUTOR COMMAND'}
             </h1>
             <div className="flex items-center gap-2 mt-0.5">
               <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${isStudent ? 'bg-emerald-500' : 'bg-cyan-500'}`}></span>
               <p className="text-[9px] text-gray-500 font-mono tracking-widest uppercase">
-                {profile?.username || 'UNKNOWN_USER'}
+                {profile?.username || 'OPERATIVE'}
               </p>
             </div>
           </div>
 
-          {/* Trigger Basic Editor manually */}
           <button 
             onClick={() => setShowBasicEdit(true)}
             className="group flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-1.5 rounded-lg hover:bg-emerald-500/10 hover:border-emerald-500/50 transition-all"
           >
             <UserIcon size={12} className="text-emerald-500 group-hover:rotate-180 transition-transform duration-700" />
-            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">Edit Basic Info</span>
+            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">Edit Identity</span>
           </button>
         </div>
         
         <div className="flex gap-2">
-          {/* Trigger Advanced Editor manually */}
+          {/* ADVANCED INFO */}
           <button 
             onClick={() => setShowAdvancedEdit(true)} 
             className={`px-3 py-1.5 rounded-lg border text-[10px] font-bold flex items-center gap-2 hover:scale-105 transition-all
@@ -166,13 +179,27 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {/* --- MAIN INTERFACE PLACEHOLDER --- */}
-      <div className="flex-1 relative w-full h-full flex items-center justify-center bg-[#050505]">
-        <div className="text-center opacity-30">
-            <RefreshCw className="mx-auto mb-4 animate-spin-slow" size={48}/>
-            <h2 className="text-2xl font-mono text-gray-500">PROFILE EDITOR MODE</h2>
-            <p className="text-xs text-gray-600 mt-2">Map and interactions disabled.</p>
+      {/* --- MAIN INTERFACE (MAP ONLY) --- */}
+      <div className="flex-1 relative w-full h-full overflow-hidden">
+        
+        {/* BACKGROUND MAP */}
+        <div className="absolute inset-0 z-0">
+          <MapDisplay 
+            myRole={profile?.role} 
+            highlightedUsers={null} // No search results to highlight
+            onLocationFound={(loc) => setUserLocation(loc)}
+            onContactUser={(user) => console.log("Map User Clicked:", user)}
+          />
         </div>
+
+        {/* Optional Overlay to show map is active */}
+        <div className="absolute bottom-4 left-4 pointer-events-none">
+           <div className="bg-black/50 backdrop-blur-sm border border-white/10 p-2 rounded text-[10px] text-gray-400 font-mono">
+              LAT: {userLocation?.lat.toFixed(4) || "---"} <br/>
+              LNG: {userLocation?.lng.toFixed(4) || "---"}
+           </div>
+        </div>
+
       </div>
 
       <style jsx>{`
