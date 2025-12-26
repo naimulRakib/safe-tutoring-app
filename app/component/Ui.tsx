@@ -13,10 +13,10 @@ export default function Home() {
           <div className="bg-blue-600 text-white p-1 rounded-lg">
             <BookOpen className="w-5 h-5" />
           </div>
-          SafeTutor
+          Scholar-Grid
         </div>
         <div className="flex gap-4 text-sm font-medium">
-          <Link href="/login" className="hidden sm:block px-4 py-2 text-slate-600 hover:text-blue-600 transition">
+          <Link href="/login" className="sm:block px-4 py-2 text-slate-600 hover:text-blue-600 transition">
             Log In
           </Link>
           <Link href="/signup" className="px-5 py-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition shadow-sm">
