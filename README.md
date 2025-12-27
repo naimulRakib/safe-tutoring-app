@@ -1,39 +1,63 @@
-https://scholar-grid.vercel.app *********************************
+SCHOLARGRID
+Deployed link https://scholar-grid.vercel.app/
 
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
-new deployed link :
+The Safe Operating System for Home Education
 
-## Getting Started
 
-First, run the development server:
+ The Elevator PitchScholarGrid is a hyper-local, safety-first operating system that connects students and tutors using PostGIS radar technology, ensuring verified identities, secure escrow payments, and real-time safety tracking for home education in Dhaka.
+ 
+  Demo & VisualsTutor Radar: (PostGIS)
+  
+  Safety Admin HQFind verified tutors within 500m radius.Real-time panic alerts and tracking.Student DashboardTutor ProfileManage active classes & QR attendance.University verified credentials.✨ Key Features🛡️ Safety InfrastructurePanic Protocol: A dedicated "SOS" button for tutors that streams live location and contact details to the Admin Safety HQ.Privacy Shield: Personal contact details (Phone/Address) are hidden until a proposal is explicitly accepted.University Verification: Automatic email validation for BUET, DMC, DU, and other top-tier universities.
+  
+   Hyper-Local IntelligencePostGIS Radar: Instead of browsing endless lists, students see tutors plotted on a map based on real-time geospatial queries.Cluster Zones: Optimized for high-density areas like "Mirpur", "Azimpur", and "Farmgate".🔐 
+   
+   
+   Double-Lock FinanceEscrow Payments: Demo class fees are held securely.2-Step Handshake: 1.  Code 1 (Start): Tutor verifies arrival.2.  Code 2 (End): Student releases payment after class completion.
+   
+   
+   Operating SystemQR Attendance: Digital signature for every class session.Connection Manager: Unified inbox for managing proposals and active contracts.
+   
+   Ghost ID Handling: Robust system to handle legacy or bulk-imported data without crashing
+   
+   
+   Tech StackFramework: 
+   
+   Next.js 15 (App Router, Server Actions)Database: Supabase (PostgreSQL)Geo-Spatial: PostGIS (Geometry & Geography types)Maps: Leaflet.js / React-Leaflet (Dark Mode Custom Tiles)Styling: Tailwind CSS + Lucide React IconsAuthentication: Supabase Auth (Email/Password + Magic Link),Vercel git actions
+   
+   
+   ⚙️ Installation1. Clone the RepoBashgit clone https://github.com/naimulRakib/safe-tutoring-app.git
 
-```bash
+
+cd scholargrid
+2. Install DependenciesBashnpm install
+# or
+yarn install
+3. Environment SetupCreate a .env.local file in the root directory and add your Supabase credentials:Code snippetNEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+4. Database Setup (SQL)Run the provided SQL scripts in your Supabase SQL Editor to set up:tutors, students, applications, contracts tables.safety_alerts table with triggered events.Enable postgis extension.(See /database/schema.sql for the full query set).
+
+UsageRun the development server:Bash
+
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Build:
+npm run build
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Open http://localhost:3000 in your browser.Student Portal: /dashboard (Login as Student)Tutor Portal: /tutor/dashboard (Login as Tutor)Admin HQ: /admin/safety (Monitor active threats)Map Radar: /gps (Test the PostGIS features)🤝 Contributing
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-## Learn More
+Feautures: 
+PostGIS Distance calculating 
+Mapping with leaflet js, QR react, Gen Ai Api , Groq Sdk LLM chatbot, Extractor js .
+Smart Filtering, 
+Double OTP handshake, Live tracing demo 
+Ai Search with filtered Data for minimal token usage ..
 
-To learn more about Next.js, take a look at the following resources:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Available Contribution :
+Make post GIS based GPS more accurate for open source map APi.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+We welcome contributions to make home education safer!Fork the Project.Create your Feature Branch (git checkout -b feature/AmazingFeature).Commit your Changes (git commit -m 'Add some AmazingFeature').Push to the Branch (git push origin feature/AmazingFeature).Open a Pull Request.📄 LicenseDistributed under the MIT License. 
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+See LICENSE for more information.Built with ❤️ for Safe Education in Bangladesh.
