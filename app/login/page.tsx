@@ -4,6 +4,16 @@ import { createClient } from '@/app/utils/supabase/client';
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { 
+  LockKeyhole, 
+  Mail, 
+  Cpu, 
+  ChevronRight, 
+  ShieldCheck, 
+  Zap, 
+  Terminal,
+  BookOpen
+} from 'lucide-react';
 
 export default function LoginPage() {
   const supabase = createClient();
@@ -31,7 +41,7 @@ export default function LoginPage() {
     checkSession();
   }, [supabase, router]);
 
-  // 2. Handle Login Only (Signup moved to dedicated page)
+  // 2. Handle Login
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -55,7 +65,7 @@ export default function LoginPage() {
     }
   };
 
-  // 3. FIXED Demo Mode (Creates Profile too!)
+  // 3. Demo Mode Logic
   const handleDemoMode = async () => {
     setLoading(true);
     const randomId = Math.floor(Math.random() * 9999);
@@ -64,7 +74,6 @@ export default function LoginPage() {
     const demoUsername = `judge_${randomId}`;
 
     try {
-      // A. Create Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: demoEmail,
         password: demoPass,
@@ -73,11 +82,10 @@ export default function LoginPage() {
       if (authError) throw authError;
       if (!authData.user) throw new Error("Auth failed");
 
-      // B. Create Profile (CRITICAL FIX)
       const { error: profileError } = await supabase.from('profiles').insert({
         id: authData.user.id,
         username: demoUsername,
-        role: 'stranger', // Default role
+        role: 'stranger',
         is_online: true,
         location: null,
         location_area: 'Demo Zone'
@@ -85,7 +93,6 @@ export default function LoginPage() {
 
       if (profileError) throw profileError;
       
-      // Success
       router.refresh();
       router.replace('/dashboard');
 
@@ -99,113 +106,150 @@ export default function LoginPage() {
 
   if (checkingAuth) {
     return (
-      <div className="min-h-screen bg-[#030303] flex items-center justify-center">
-        <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      <div className="min-h-screen bg-[#050505] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin shadow-[0_0_15px_rgba(16,185,129,0.4)]"></div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#030303] text-white font-sans selection:bg-blue-500 selection:text-white relative overflow-hidden flex items-center justify-center">
+    <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-emerald-500/30 relative overflow-hidden flex items-center justify-center p-6">
       
-      {/* Background FX */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-        <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-blue-900/20 rounded-full blur-[100px] animate-pulse" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-indigo-900/20 rounded-full blur-[100px] animate-pulse delay-1000" />
+      {/* Background Grid Pattern */}
+      <div className="fixed inset-0 z-0 opacity-20 pointer-events-none" 
+           style={{ backgroundImage: `radial-gradient(#10b981 0.5px, transparent 0.5px)`, backgroundSize: '30px 30px' }}>
       </div>
 
-      <main className="w-full max-w-md relative z-10 px-6">
+      {/* Background Ambient Glows */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
+        <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-emerald-900/10 rounded-full blur-[120px] animate-pulse" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-cyan-900/10 rounded-full blur-[120px] animate-pulse delay-1000" />
+      </div>
+
+      <main className="w-full max-w-md relative z-10">
         
-        {/* Logo */}
-        <div className="text-center mb-8">
-            <div className="inline-flex items-center gap-2 font-bold text-2xl tracking-tighter cursor-pointer hover:scale-105 transition-transform">
-              <div className="w-8 h-8 bg-gradient-to-tr from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/30">
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        {/* Logo Section */}
+        <div className="text-center mb-10">
+            <div className="inline-flex items-center gap-3 font-black text-3xl tracking-tighter group cursor-pointer">
+              <div className="w-10 h-10 bg-emerald-500 text-black rounded-xl flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.4)] group-hover:scale-110 transition-transform">
+                <BookOpen size={24} />
               </div>
-              <span className="bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
-                Uber<span className="text-blue-500">Tutor</span>
+              <span className="uppercase">
+                Scholar<span className="text-emerald-500">Grid</span>
               </span>
             </div>
-          <p className="text-gray-500 text-sm mt-2">Find knowledge, anywhere, instantly.</p>
+          <p className="text-zinc-500 text-xs font-mono mt-3 uppercase tracking-[0.3em]">Authorized Access Only</p>
         </div>
 
-        {/* Login Form */}
-        <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-3xl p-8 shadow-2xl relative overflow-hidden">
-          <form onSubmit={handleLogin} className="space-y-5 relative z-10">
-            <div className="space-y-1 group">
-              <label className="text-xs font-mono text-gray-400 ml-1">EMAIL</label>
-              <div className="relative">
-                <input 
-                  type="email" 
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  placeholder="student@example.com"
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 pl-11 text-white placeholder-gray-600 focus:outline-none focus:border-blue-500/50 focus:bg-black/60 transition-all"
-                  required
-                />
-                <svg className="w-5 h-5 text-gray-500 absolute left-3 top-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
-              </div>
-            </div>
+        {/* Login Form Container */}
+        <div className="backdrop-blur-xl bg-zinc-900/40 border border-zinc-800 rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden group">
+          
+          {/* Scanning Line Animation */}
+          <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent animate-[scan_4s_linear_infinite]" />
 
-            <div className="space-y-1 group">
-              <label className="text-xs font-mono text-gray-400 ml-1">PASSWORD</label>
-              <div className="relative">
-                <input 
-                  type="password" 
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 pl-11 text-white placeholder-gray-600 focus:outline-none focus:border-blue-500/50 focus:bg-black/60 transition-all"
-                  required
-                />
-                <svg className="w-5 h-5 text-gray-500 absolute left-3 top-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+          <form onSubmit={handleLogin} className="space-y-6 relative z-10">
+            <div className="space-y-5">
+              
+              {/* Email Input */}
+              <div className="space-y-2 group">
+                <label className="text-[10px] font-black font-mono text-zinc-500 ml-1 uppercase tracking-widest flex items-center gap-2">
+                  <Terminal size={10} className="text-emerald-500" /> Identifier_Email
+                </label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-zinc-600 absolute left-4 top-1/2 -translate-y-1/2 group-focus-within:text-emerald-500 transition-colors" />
+                  <input 
+                    type="email" 
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder="name@provider.com"
+                    className="w-full bg-zinc-950/50 border border-zinc-800 rounded-2xl py-4 pl-12 pr-4 text-sm text-white placeholder-zinc-700 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20 transition-all"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Password Input */}
+              <div className="space-y-2 group">
+                <label className="text-[10px] font-black font-mono text-zinc-500 ml-1 uppercase tracking-widest flex items-center gap-2">
+                  <Terminal size={10} className="text-emerald-500" /> Encrypted_Passphrase
+                </label>
+                <div className="relative">
+                  <LockKeyhole className="w-4 h-4 text-zinc-600 absolute left-4 top-1/2 -translate-y-1/2 group-focus-within:text-emerald-500 transition-colors" />
+                  <input 
+                    type="password" 
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    className="w-full bg-zinc-950/50 border border-zinc-800 rounded-2xl py-4 pl-12 pr-4 text-sm text-white placeholder-zinc-700 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20 transition-all"
+                    required
+                  />
+                </div>
               </div>
             </div>
 
             <button 
               type="submit" 
               disabled={loading}
-              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-3.5 rounded-xl hover:shadow-[0_0_20px_-5px_rgba(59,130,246,0.5)] transition-all active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed flex justify-center items-center gap-2"
+              className="w-full bg-emerald-500 text-black font-black py-4 rounded-2xl hover:bg-emerald-400 hover:shadow-[0_0_25px_rgba(16,185,129,0.4)] transition-all active:scale-[0.98] disabled:opacity-50 flex justify-center items-center gap-3 uppercase text-xs tracking-widest"
             >
               {loading ? (
-                <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                <div className="w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin"></div>
               ) : (
-                <>Access Radar <span className="text-lg">➔</span></>
+                <>Initialize Session <ChevronRight size={18} /></>
               )}
             </button>
           </form>
 
-          {/* Redirect to Signup Page */}
-          <div className="relative my-6 text-center">
+          {/* Links */}
+          <div className="mt-8 pt-6 border-t border-zinc-800 text-center space-y-4">
             <Link 
               href="/signup"
-              className="text-xs text-gray-400 hover:text-white transition-colors underline decoration-gray-700 underline-offset-4"
+              className="block text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-emerald-400 transition-colors"
             >
-              New here? Create Identity
+              Request New Identity Profile
             </Link>
           </div>
 
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/10"></div></div>
-            <div className="relative flex justify-center text-xs uppercase"><span className="bg-[#0f0f0f] px-2 text-gray-500 rounded-full">Hackathon Tools</span></div>
+          {/* Separator */}
+          <div className="relative my-8 flex items-center">
+            <div className="flex-grow border-t border-zinc-800"></div>
+            <span className="mx-4 text-[10px] font-mono text-zinc-700 uppercase tracking-[0.2em]">Dev_Access</span>
+            <div className="flex-grow border-t border-zinc-800"></div>
           </div>
 
           {/* DEMO BUTTON */}
           <button 
             onClick={handleDemoMode}
             disabled={loading}
-            className="w-full bg-white/5 border border-white/10 text-green-400 font-semibold py-3 rounded-xl hover:bg-white/10 hover:text-green-300 transition-all flex items-center justify-center gap-3 group"
+            className="w-full bg-zinc-950 border border-emerald-500/20 text-emerald-400 font-bold py-4 rounded-2xl hover:bg-emerald-500/5 hover:border-emerald-500/40 transition-all flex items-center justify-between px-6 group"
           >
-            <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center group-hover:bg-green-500/30 transition">
-              <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+            <div className="flex items-center gap-4">
+               <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors">
+                 <Zap size={20} className="fill-emerald-500" />
+               </div>
+               <div className="text-left">
+                 <div className="text-[9px] text-zinc-500 font-mono uppercase tracking-tighter">Bypass Protocol</div>
+                 <div className="text-sm">Judge Instant Login</div>
+               </div>
             </div>
-            <div className="text-left">
-              <div className="text-xs text-gray-500 font-normal">Judge / Demo Mode</div>
-              <div>⚡ Instant Access</div>
-            </div>
+            <ShieldCheck size={20} className="opacity-40 group-hover:opacity-100 transition-opacity" />
           </button>
         </div>
+
+        {/* Footer info */}
+        <p className="text-center mt-10 text-[10px] font-mono text-zinc-600 uppercase tracking-[0.2em]">
+          ScholarGrid Secure Core // v1.0.4
+        </p>
       </main>
+
+      <style jsx global>{`
+        @keyframes scan {
+          0% { transform: translateY(0); opacity: 0; }
+          10% { opacity: 1; }
+          90% { opacity: 1; }
+          100% { transform: translateY(460px); opacity: 0; }
+        }
+      `}</style>
     </div>
   );
 }
