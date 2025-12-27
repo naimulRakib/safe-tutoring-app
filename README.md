@@ -1,4 +1,4 @@
-SCHOLARGRID
+SCHOLARGRID - A hackjam Project 2025 by LIGHTBORN
 Deployed link https://scholar-grid.vercel.app/
 
 The Safe Operating System for Home Education
@@ -26,16 +26,24 @@ The Safe Operating System for Home Education
    Next.js 15 (App Router, Server Actions)Database: Supabase (PostgreSQL)Geo-Spatial: PostGIS (Geometry & Geography types)Maps: Leaflet.js / React-Leaflet (Dark Mode Custom Tiles)Styling: Tailwind CSS + Lucide React IconsAuthentication: Supabase Auth (Email/Password + Magic Link),Vercel git actions
    
    
-   ⚙️ Installation1. Clone the RepoBashgit clone https://github.com/naimulRakib/safe-tutoring-app.git
+   ⚙️ Installation:
+   1. Clone the RepoBashgit clone https://github.com/naimulRakib/safe-tutoring-app.git
 
 
-cd scholargrid
-2. Install DependenciesBashnpm install
+    cd safe-tutoring-ap
+  
+  2. Install Dependencies (Bash)
+   
+   npm install
 # or
-yarn install
+   yarn install
+
+
+   ////Environment keys are not shareable !
 3. Environment SetupCreate a .env.local file in the root directory and add your Supabase credentials:Code snippetNEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-4. Database Setup (SQL)Run the provided SQL scripts in your Supabase SQL Editor to set up:tutors, students, applications, contracts tables.safety_alerts table with triggered events.Enable postgis extension.(See /database/schema.sql for the full query set).
+
+5. Database Setup (SQL)Run the provided SQL scripts in your Supabase SQL Editor to set up:tutors, students, applications, contracts tables.safety_alerts table with triggered events.Enable postgis extension.(See /database/schema.sql for the full query set).
 
 UsageRun the development server:Bash
 
