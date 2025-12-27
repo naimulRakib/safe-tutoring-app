@@ -44,7 +44,7 @@ npm run dev
 Build:
 npm run build
 
-Open http://localhost:3000 in your browser.Student Portal: /dashboard (Login as Student)Tutor Portal: /tutor/dashboard (Login as Tutor)Admin HQ: /admin/safety (Monitor active threats)Map Radar: /gps (Test the PostGIS features)🤝 Contributing
+Open http://localhost:3000 in your browser.Student Portal: /dashboard (Login as Student)Tutor Portal: /auth/dashboard (Login as Tutor)Admin HQ: /admin/safety (Monitor active threats)Map Radar: /gps (Test the PostGIS features)🤝 Contributing
 
 
 Feautures: 
