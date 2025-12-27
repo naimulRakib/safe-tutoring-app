@@ -1,11 +1,12 @@
 'use client';
 
 import React from 'react';
-import Link from 'next/link'; // Import Link
+import Link from 'next/link'; 
 import { 
   ShieldCheck, GraduationCap, MapPin, Banknote, 
   Ruler, Flame, Eye, Trash2, Clock, BookOpen, 
-  User as UserIcon, Heart, School, UserCheck, FileText, Star // Import Star icon
+  User as UserIcon, Heart, School, UserCheck, FileText, Star, 
+  ExternalLink // 👈 1. Added ExternalLink Icon
 } from 'lucide-react';
 import { getDistanceKm } from './MapUtils';
 
@@ -83,11 +84,9 @@ export default function UserCard({
       //      STUDENT MODE
       // ==========================
       
-      // 1. Name
       const cls = basic.class_level || user.class_level;
       displayName = cls ? `Student (${cls})` : "Student";
 
-      // 2. Institution / Preference
       const prefInst = priority.preferred_institution || user.preferred_institution;
       const curInst = basic.institution || user.institution;
       
@@ -101,7 +100,6 @@ export default function UserCard({
           institutionDisplay = "Institution Hidden";
       }
 
-      // 3. Budget
       salaryLabel = "Budget";
       const sMin = Number(tuition.salary_min ?? user.salary_min ?? 0);
       const sMax = Number(tuition.salary_max ?? user.salary_max ?? user.budget ?? 0);
@@ -110,21 +108,17 @@ export default function UserCard({
       else if (sMax > 0) budgetOrSalary = `Up to ৳${sMax}`;
       else if (sMin > 0) budgetOrSalary = `Min ৳${sMin}`;
 
-      // 4. Subjects
       const rawSubs = tuition.subjects || user.subjects;
       if (Array.isArray(rawSubs)) subjects = rawSubs;
       else if (typeof rawSubs === 'string') subjects = rawSubs.split(',').map((s: string) => s.trim());
 
-      // 5. Availability
       const days = tuition.days_per_week ?? user.days_per_week ?? tuition.days;
       if (days && Number(days) > 0) {
           availabilityDisplay = `${days} Days / Week`;
       }
 
-      // 6. Verification
       isVerified = verifyData.status === 'verified' || user.status === 'verified' || user.is_verified === true;
 
-      // 7. Special Requirements
       genderPref = priority.tutor_gender || user.tutor_gender || "Any";
       otherReq = priority.other_requirements || user.other_requirements || "";
 
@@ -161,20 +155,17 @@ export default function UserCard({
       }
   }
 
-  // --- 5. LOCATION & DISTANCE (FIXED) ---
+  // --- 5. LOCATION & DISTANCE ---
   const locationName = user.primary_area || "Dhaka";
   
-  // Ensure we have numbers for calculation
   const lat = parseFloat(user.lat || user.latitude);
   const lng = parseFloat(user.lng || user.longitude);
   
   let distDisplay = null;
 
-  // Check if both userLoc and target coords are valid numbers
   if (userLoc && !isNaN(lat) && !isNaN(lng)) {
       const dist = getDistanceKm(userLoc[0], userLoc[1], lat, lng);
       
-      // Ensure result is a valid number before comparing
       if (typeof dist === 'number' && !isNaN(dist)) {
           distDisplay = dist < 1 ? `${Math.round(dist * 1000)}m` : `${dist.toFixed(1)}km`;
       }
@@ -198,7 +189,6 @@ export default function UserCard({
         <div className="mb-2 pr-8"> 
             <div className="flex items-center gap-1.5">
               <h3 className="font-bold text-sm text-gray-900 truncate">{displayName}</h3>
-              {/* Show Shield for Verified Tutors OR Verified Students */}
               {isVerified && <ShieldCheck size={14} className="text-blue-500 fill-blue-50" />}
             </div>
 
@@ -296,7 +286,18 @@ export default function UserCard({
               <Star size={14} />
             </Link>
 
-            {/* PROFILE BUTTON */}
+            {/* 👇 2. NEW: TUTOR PROFILE LINK (Tutors Only) */}
+            {!isViewingStudent && (
+              <Link
+                href={`/tutorprofile/${resolveId}`}
+                className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors border border-transparent hover:border-indigo-200 flex items-center justify-center"
+                title="View Full Page"
+              >
+                <ExternalLink size={14} />
+              </Link>
+            )}
+
+            {/* QUICK VIEW PROFILE (Modal) */}
             {onViewProfile && (
                 <button 
                   onClick={() => onViewProfile(resolveId, user.match_score || 0)}

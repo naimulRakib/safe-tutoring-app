@@ -10,7 +10,8 @@ import { createClient } from '@/app/utils/supabase/client';
 import { 
   FileText, Search, LogOut, Mail, RefreshCw, 
   User as UserIcon, ShieldAlert, CheckCircle, 
-  GraduationCap, BellRing, X, CalendarClock, List 
+  GraduationCap, BellRing, X, CalendarClock, List,
+  LayoutDashboard // 👈 Added Icon import
 } from 'lucide-react'; 
 
 // --- COMPONENTS ---
@@ -230,6 +231,11 @@ export default function DashboardPage() {
         </div>
         <div className="flex gap-2">
           
+          {/* 👇 NEW BUTTON: DASHBOARD OPTION */}
+          <button onClick={() => router.push('/dashboard')} className="px-3 py-1.5 rounded-lg border text-[10px] font-bold flex items-center gap-2 bg-zinc-800 text-zinc-300 border-zinc-700 hover:bg-zinc-700 transition-all">
+             <LayoutDashboard size={12} /> DASHBOARD
+          </button>
+
           {/* 👇 NEW BUTTON FOR STUDENTS: LOCAL LIST */}
           {isStudent && (
              <button 
