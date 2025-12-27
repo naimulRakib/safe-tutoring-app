@@ -1,9 +1,9 @@
+'use client'; // 👈 Essential for Next.js App Router
+
 import { useState } from 'react';
-// 1. CHANGE THIS IMPORT (Crucial)
 import { createClient } from '@/app/utils/supabase/client';
 
 export default function VarsityVerification({ tutorId }: { tutorId: string }) {
-  // 2. INITIALIZE CLIENT CORRECTLY
   const supabase = createClient(); 
 
   const [step, setStep] = useState<'INPUT' | 'VERIFY'>('INPUT');
@@ -44,6 +44,15 @@ export default function VarsityVerification({ tutorId }: { tutorId: string }) {
     setLoading(true);
     setMsg('');
 
+    // Check 1: Is user logged in?
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user || user.id !== tutorId) {
+      console.error("Auth Error: You are not logged in as this tutor.");
+      setMsg("❌ Error: Auth Mismatch. Are you logged in?");
+      setLoading(false);
+      return;
+    }
+
     if (!email.endsWith('buet.ac.bd')) {
       setMsg('❌ Error: Only @buet.ac.bd emails allowed.');
       setLoading(false);
@@ -52,20 +61,25 @@ export default function VarsityVerification({ tutorId }: { tutorId: string }) {
 
     const code = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // Debug Log
-    console.log("Saving code for User:", tutorId);
+    console.log(`🚀 Attempting to insert for User: ${tutorId}, Email: ${email}`);
 
-    const { error } = await supabase.from('verification_codes').insert({
+    const { data, error } = await supabase.from('verification_codes').insert({
       user_id: tutorId,
       email: email,
       code: code
-    });
+    }).select(); // .select() returns the data so we can confirm insertion
 
     if (error) {
-      console.error("Insert Error:", error);
-      setMsg('❌ Database Error. Check Console.');
+      // DEBUG: Detailed Error Logging
+      console.error("❌ INSERT FAILED");
+      console.error("Message:", error.message);
+      console.error("Details:", error.details);
+      console.error("Hint:", error.hint);
+      console.error("Code:", error.code);
+      setMsg(`❌ DB Error: ${error.message || 'Check Console'}`);
     } else {
-      console.log(`📨 SENT CODE TO ${email}: ${code}`);
+      console.log("✅ Insert Success:", data);
+      console.log(`📨 MOCK EMAIL: Code is ${code}`); // Since we don't have a real mailer yet
       setMsg(`✅ Code sent! (Check Console for ID: ${code})`);
       setStep('VERIFY');
     }
@@ -75,9 +89,8 @@ export default function VarsityVerification({ tutorId }: { tutorId: string }) {
   // --- 2. VERIFY CODE ---
   const verifyCode = async () => {
     setLoading(true);
-    console.log("Verifying code:", otp, "for User:", tutorId);
+    console.log(`🔍 Verifying OTP: ${otp} for User: ${tutorId}`);
 
-    // FIXED QUERY: Use .maybeSingle() to prevent 406 errors
     const { data, error } = await supabase
       .from('verification_codes')
       .select('*')
@@ -85,17 +98,18 @@ export default function VarsityVerification({ tutorId }: { tutorId: string }) {
       .eq('code', otp)
       .order('created_at', { ascending: false })
       .limit(1)
-      .maybeSingle(); // <--- This prevents the crash if no row is found
+      .maybeSingle();
 
     if (error) {
-      console.error("Select Error:", error);
-      setMsg('❌ System Error.');
+      console.error("Select Error:", error.message);
+      setMsg('❌ System Error during verification.');
       setLoading(false);
       return;
     }
 
     if (!data) {
-      setMsg('❌ Invalid Code or Permission Denied.');
+      console.warn("No matching code found in DB.");
+      setMsg('❌ Invalid Code. Please try again.');
       setLoading(false);
       return;
     }
@@ -104,10 +118,12 @@ export default function VarsityVerification({ tutorId }: { tutorId: string }) {
     const varsityInfo = parseVarsityInfo(email);
 
     if (!varsityInfo) {
-      setMsg('❌ Could not parse ID.');
+      setMsg('❌ Could not parse Student ID from email.');
       setLoading(false);
       return;
     }
+
+    console.log("📝 Updating Tutor Profile with:", varsityInfo);
 
     // UPDATE TUTOR PROFILE
     const { error: updateError } = await supabase
@@ -119,8 +135,8 @@ export default function VarsityVerification({ tutorId }: { tutorId: string }) {
       .eq('id', tutorId);
 
     if (updateError) {
-      console.error("Update Error:", updateError);
-      setMsg('❌ Failed to update profile.');
+      console.error("Update Error:", updateError.message);
+      setMsg('❌ Failed to update tutor profile. Check RLS policies on "tutors" table.');
     } else {
       setMsg('🎉 SUCCESS! You are verified.');
     }
@@ -131,7 +147,7 @@ export default function VarsityVerification({ tutorId }: { tutorId: string }) {
     <div className="p-4 border rounded bg-white shadow-sm max-w-sm text-black">
       <h3 className="font-bold text-lg mb-2">Varsity Verification 🎓</h3>
       
-      {msg && <div className="text-sm mb-3 p-2 bg-gray-100 rounded">{msg}</div>}
+      {msg && <div className="text-sm mb-3 p-2 bg-gray-100 rounded border border-gray-200">{msg}</div>}
 
       {step === 'INPUT' ? (
         <div className="space-y-2">
@@ -144,7 +160,7 @@ export default function VarsityVerification({ tutorId }: { tutorId: string }) {
           <button 
             onClick={sendCode} 
             disabled={loading}
-            className="w-full bg-red-700 text-white p-2 rounded"
+            className="w-full bg-red-700 text-white p-2 rounded hover:bg-red-800 disabled:opacity-50"
           >
             {loading ? 'Sending...' : 'Send Code'}
           </button>
@@ -153,7 +169,7 @@ export default function VarsityVerification({ tutorId }: { tutorId: string }) {
         <div className="space-y-2">
           <p className="text-xs text-gray-500">Enter code sent to {email}</p>
           <input 
-            className="w-full border p-2 rounded text-center tracking-widest" 
+            className="w-full border p-2 rounded text-center tracking-widest font-bold" 
             placeholder="123456"
             value={otp}
             onChange={e => setOtp(e.target.value)}
@@ -161,9 +177,15 @@ export default function VarsityVerification({ tutorId }: { tutorId: string }) {
           <button 
             onClick={verifyCode} 
             disabled={loading}
-            className="w-full bg-green-600 text-white p-2 rounded"
+            className="w-full bg-green-600 text-white p-2 rounded hover:bg-green-700 disabled:opacity-50"
           >
             {loading ? 'Verifying...' : 'Verify Identity'}
+          </button>
+          <button 
+            onClick={() => setStep('INPUT')}
+            className="w-full text-xs text-gray-500 underline mt-2"
+          >
+            Wrong email? Go back.
           </button>
         </div>
       )}
