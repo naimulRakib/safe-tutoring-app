@@ -30,7 +30,7 @@ export default function LoginPage() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-          router.replace('/dashboard');
+          router.replace('/gps');
         } else {
           setCheckingAuth(false);
         }
