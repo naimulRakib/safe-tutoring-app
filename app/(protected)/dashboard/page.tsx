@@ -1,274 +1,239 @@
-// 👇 This line fixes the "Prerender Error" during build
-// export const dynamic = 'force-dynamic';
-
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation'; 
-import dynamicImport from 'next/dynamic'; 
+import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { createClient } from '@/app/utils/supabase/client';
 import { 
-  FileText, 
-  LogOut, 
-  RefreshCw, 
-  User as UserIcon, 
-  CheckCircle, // Added Icon
-  GraduationCap // Added Icon
-} from 'lucide-react'; 
+  Map, ShieldAlert, FileText, LayoutDashboard, 
+  Siren, MonitorPlay, LogOut, User, 
+  Wallet, BookOpen, ChevronRight, Activity, Bell, GraduationCap // <--- Added Icon
+} from 'lucide-react';
 
-// --- COMPONENTS KEPT ---
-import ProfileEditor from '@/app/component/ProfileEditor';
-import ProfileAdvanced from '@/app/component/ProfileAdvanced';
-import VarsityVerification from '@/app/component/VarsityVerifications'; // Added Component
-
-// Dynamic Map
-const MapDisplay = dynamicImport(() => import('@/app/component/MapDisplay'), { 
-  ssr: false,
-  loading: () => (
-    <div className="h-full w-full bg-[#050505] flex flex-col items-center justify-center text-emerald-500 font-mono">
-      <RefreshCw className="animate-spin mb-2" size={24} />
-      <span className="text-[10px] tracking-[0.3em] uppercase">Initializing Global Map...</span>
-    </div>
-  )
-});
-
-export default function DashboardPage() {
+export default function DashboardHome() {
   const supabase = createClient();
   const router = useRouter();
   
-  // --- CORE STATE ---
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
-  
-  // --- UI MODALS ---
-  const [showBasicEdit, setShowBasicEdit] = useState(false);
-  const [showAdvancedEdit, setShowAdvancedEdit] = useState(false);
-  const [showVarsityVerify, setShowVarsityVerify] = useState(false); // Added State
+  const [stats, setStats] = useState({ activeContracts: 0, pendingRequests: 0 });
 
-  // --- MAP STATE ---
-  const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
-
-  /**
-   * 1. FETCH PROFILE
-   */
-  const fetchProfile = useCallback(async () => {
-    try {
+  // 1. AUTH & DATA FETCH
+  useEffect(() => {
+    const init = async () => {
+      // Check Session
       const { data: { user } } = await supabase.auth.getUser();
-      
       if (!user) {
-        router.replace('/login'); 
+        router.replace('/login');
         return;
       }
+      setUser(user);
 
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('*') 
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (profileError) throw profileError;
-
-      // Fetch tutor specific data for verification status
-      let tutorData = null;
-      if (profileData?.role === 'tutor') {
-        const { data: tData } = await supabase
-          .from('tutors')
-          .select('varsity_verified')
-          .eq('id', user.id)
-          .maybeSingle();
-        tutorData = tData;
-      }
-
-      const completeProfile = { ...profileData, ...tutorData };
-      setProfile(completeProfile);
+      // Fetch Profile Role
+      let { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
       
-      // Trigger First-Time Setup if role is missing
-      if (!profileData || !profileData.role || profileData.role === 'stranger') {
-        setShowBasicEdit(true);
-      } else if (profileData.role === 'tutor' && !tutorData?.varsity_verified) {
-        // Optional: Auto-open verification for unverified tutors
-        // setShowVarsityVerify(true); 
-      } else {
-        setShowBasicEdit(false);
+      // If profile missing, fetch specific table
+      if (!profileData) {
+        const { data: tData } = await supabase.from('tutors').select('*').eq('id', user.id).single();
+        if (tData) profileData = { ...tData, role: 'tutor' };
+        else {
+           const { data: sData } = await supabase.from('students').select('*').eq('id', user.id).single();
+           if (sData) profileData = { ...sData, role: 'student' };
+        }
       }
-      
-    } catch (error) { 
-      console.error("Dashboard Identity Error:", error); 
-    } finally {
+      setProfile(profileData);
+
+      // Fetch Quick Stats (Active Contracts)
+      const { count: activeCount } = await supabase
+        .from('contracts')
+        .select('*', { count: 'exact', head: true })
+        .eq(profileData?.role === 'tutor' ? 'tutor_id' : 'student_id', user.id)
+        .eq('status', 'active');
+
+       // Fetch Pending
+      const { count: pendingCount } = await supabase
+        .from('contracts')
+        .select('*', { count: 'exact', head: true })
+        .eq(profileData?.role === 'tutor' ? 'tutor_id' : 'student_id', user.id)
+        .eq('status', 'pending');
+
+      setStats({ 
+        activeContracts: activeCount || 0, 
+        pendingRequests: pendingCount || 0 
+      });
+
       setLoading(false);
-    }
-  }, [supabase, router]);
+    };
 
-  useEffect(() => {
-    fetchProfile();
-  }, [fetchProfile]);
-
-  /**
-   * 2. HANDLERS
-   */
-  const handleProfileUpdate = (newRole: string) => {
-      setProfile((prev: any) => ({ ...prev, role: newRole }));
-      setShowBasicEdit(false);
-      if (newRole === 'tutor') {
-        setShowVarsityVerify(true);
-      } else {
-        // Open advanced editor after basic is done for students
-        setTimeout(() => setShowAdvancedEdit(true), 500);
-      }
-  };
+    init();
+  }, [router, supabase]);
 
   const handleLogout = async () => {
-    setLoading(true);
     await supabase.auth.signOut();
     router.replace('/login');
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center text-emerald-500 font-mono space-y-4">
-        <div className="w-12 h-1 bg-emerald-900 overflow-hidden relative">
-          <div className="absolute inset-0 bg-emerald-500 animate-progress"></div>
-        </div>
-        <span className="text-[10px] tracking-widest animate-pulse uppercase">Loading_Geospatial_Data...</span>
-      </div>
-    );
-  }
+  if (loading) return (
+    <div className="min-h-screen bg-[#050505] flex items-center justify-center text-emerald-500 font-mono tracking-widest text-xs">
+      INITIALIZING DASHBOARD...
+    </div>
+  );
 
-  const isStudent = profile?.role === 'student';
+  const isTutor = profile?.role === 'tutor';
 
   return (
-    <div className="h-screen bg-[#050505] flex flex-col text-white font-sans relative overflow-hidden selection:bg-emerald-500 selection:text-black">
+    <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-emerald-500/30 p-4 md:p-8">
       
-      {/* --- MODAL LAYER --- */}
-      
-      {/* 1. BASIC IDENTITY */}
-      {showBasicEdit && (
-        <div className="absolute inset-0 z-[9999] bg-black/90 backdrop-blur-xl flex items-center justify-center p-4">
-           <ProfileEditor 
-              onProfileUpdate={handleProfileUpdate}
-              onClose={() => setShowBasicEdit(false)} 
-              isForced={!profile?.role || profile?.role === 'stranger'} 
-           />
-        </div>
-      )}
-
-      {/* 2. ADVANCED DATA */}
-      {showAdvancedEdit && (
-        <div className="absolute inset-0 z-[9999] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
-           <ProfileAdvanced 
-             role={profile?.role}
-             onClose={() => setShowAdvancedEdit(false)} 
-           />
-        </div>
-      )}
-
-      {/* 3. VARSITY VERIFICATION (New Modal) */}
-      {showVarsityVerify && profile?.role === 'tutor' && (
-        <div className="absolute inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="relative">
-             <button 
-                onClick={() => setShowVarsityVerify(false)}
-                className="absolute -top-10 right-0 text-white/50 hover:text-white text-sm flex items-center gap-1"
-             >
-               Skip for now <LogOut size={12}/>
-             </button>
-             <VarsityVerification tutorId={profile.id} />
-          </div>
-        </div>
-      )}
-
       {/* --- HEADER --- */}
-      <header className="p-4 border-b border-white/10 bg-black/60 backdrop-blur-md z-10 flex justify-between items-center shadow-2xl">
-        <div className="flex items-center gap-5">
-          <div>
-            <h1 className={`text-xl font-black tracking-tighter transition-all duration-500 ${isStudent ? 'text-emerald-400' : 'text-cyan-400'}`}>
-              {isStudent ? 'STUDENT RADAR' : 'TUTOR COMMAND'}
-            </h1>
-            <div className="flex items-center gap-2 mt-0.5">
-              <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${isStudent ? 'bg-emerald-500' : 'bg-cyan-500'}`}></span>
-              <p className="text-[9px] text-gray-500 font-mono tracking-widest uppercase">
-                {profile?.username || 'OPERATIVE'}
-              </p>
-            </div>
+      <header className="flex justify-between items-center mb-10">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-zinc-800 to-black border border-zinc-700 flex items-center justify-center">
+             <User className="text-zinc-400" size={24} />
           </div>
-
-          <button 
-            onClick={() => setShowBasicEdit(true)}
-            className="group flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-1.5 rounded-lg hover:bg-emerald-500/10 hover:border-emerald-500/50 transition-all"
-          >
-            <UserIcon size={12} className="text-emerald-500 group-hover:rotate-180 transition-transform duration-700" />
-            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">Edit Identity</span>
-          </button>
+          <div>
+             <h1 className="text-xl font-bold">
+               Welcome back, {profile?.username || profile?.basic_info?.full_name || "User"}
+             </h1>
+             <p className="text-xs text-zinc-500 font-mono uppercase tracking-wide">
+               {isTutor ? 'Tutor Operative' : 'Student Account'} • <span className="text-emerald-500">Online</span>
+             </p>
+          </div>
         </div>
-        
-        <div className="flex gap-2">
-          
-          {/* VARSITY VERIFICATION BUTTON (Only for Tutors) */}
-          {!isStudent && (
-             <button
-               onClick={() => setShowVarsityVerify(true)}
-               className={`px-3 py-1.5 rounded-lg border text-[10px] font-bold flex items-center gap-2 transition-all
-                 ${profile?.varsity_verified 
-                    ? 'bg-green-900/20 border-green-500/30 text-green-400 hover:bg-green-900/30' 
-                    : 'bg-yellow-900/20 border-yellow-500/30 text-yellow-400 animate-pulse hover:bg-yellow-900/30'}`}
-             >
-               {profile?.varsity_verified ? <CheckCircle size={12} /> : <GraduationCap size={12} />}
-               {profile?.varsity_verified ? 'VERIFIED' : 'VERIFY VARSITY'}
-             </button>
-          )}
 
-          {/* ADVANCED INFO */}
-          <button 
-            onClick={() => setShowAdvancedEdit(true)} 
-            className={`px-3 py-1.5 rounded-lg border text-[10px] font-bold flex items-center gap-2 hover:scale-105 transition-all
-              ${isStudent 
-                ? 'bg-emerald-900/30 border-emerald-500/30 text-emerald-400' 
-                : 'bg-cyan-900/30 border-cyan-500/30 text-cyan-400'}`}
-          >
-            <FileText size={12} />
-            {isStudent ? 'EDIT REQUIREMENTS' : 'EDIT DOSSIER / CV'}
-          </button>
-          
-          <button onClick={handleLogout} className="px-3 py-1.5 rounded-lg border border-red-500/30 bg-red-500/10 text-[10px] font-bold text-red-400 hover:bg-red-500/20 transition-all">
-            <LogOut size={12} />
-          </button>
-        </div>
+        <button 
+          onClick={handleLogout}
+          className="p-3 rounded-full hover:bg-red-500/10 hover:text-red-500 text-zinc-500 transition-colors"
+        >
+          <LogOut size={20} />
+        </button>
       </header>
 
-      {/* --- MAIN INTERFACE (MAP ONLY) --- */}
-      <div className="flex-1 relative w-full h-full overflow-hidden">
-        
-        {/* BACKGROUND MAP */}
-        <div className="absolute inset-0 z-0">
-          <MapDisplay 
-            myRole={profile?.role} 
-            highlightedUsers={null} // No search results to highlight
-            onLocationFound={(loc) => setUserLocation(loc)}
-            onContactUser={(user) => console.log("Map User Clicked:", user)}
-          />
+      {/* --- MAIN GRID LAYOUT --- */}
+      <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-6">
+
+        {/* 1. KEY METRICS (Top Row) */}
+        <div className="md:col-span-2 bg-zinc-900/50 border border-zinc-800 rounded-3xl p-6 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <Activity size={100} />
+          </div>
+          <h3 className="text-zinc-500 text-xs font-bold uppercase tracking-widest mb-1">Active Tuitions</h3>
+          <div className="flex items-end gap-2">
+            <span className="text-5xl font-black text-white">{stats.activeContracts}</span>
+            <span className="text-sm text-emerald-500 mb-2 font-bold">Sessions Live</span>
+          </div>
+          <div className="mt-4 flex gap-2">
+            <Link href="/contract" className="text-xs bg-white text-black px-4 py-2 rounded-full font-bold hover:bg-emerald-400 transition-colors">
+              Manage Contracts
+            </Link>
+          </div>
         </div>
 
-        {/* Optional Overlay to show map is active */}
-        <div className="absolute bottom-4 left-4 pointer-events-none">
-           <div className="bg-black/50 backdrop-blur-sm border border-white/10 p-2 rounded text-[10px] text-gray-400 font-mono">
-              LAT: {userLocation?.lat.toFixed(4) || "---"} <br/>
-              LNG: {userLocation?.lng.toFixed(4) || "---"}
-           </div>
+        <div className="md:col-span-2 bg-zinc-900/50 border border-zinc-800 rounded-3xl p-6 relative overflow-hidden group">
+           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <Bell size={100} />
+          </div>
+          <h3 className="text-zinc-500 text-xs font-bold uppercase tracking-widest mb-1">
+             {isTutor ? 'Job Offers' : 'Pending Requests'}
+          </h3>
+          <div className="flex items-end gap-2">
+            <span className="text-5xl font-black text-white">{stats.pendingRequests}</span>
+            <span className="text-sm text-yellow-500 mb-2 font-bold">Needs Action</span>
+          </div>
+          <div className="mt-4">
+             <Link href={isTutor ? "/tutor/dashboard" : "/contract"} className="text-xs border border-zinc-700 text-zinc-300 px-4 py-2 rounded-full font-bold hover:bg-zinc-800 transition-colors">
+              View Inbox
+            </Link>
+          </div>
         </div>
+
+
+        {/* 2. THE MAP FEATURE (Big Card) */}
+        <Link href="/gps" className="md:col-span-3 bg-gradient-to-br from-emerald-950/30 to-black border border-emerald-500/30 rounded-3xl p-8 relative overflow-hidden group hover:border-emerald-500/60 transition-all cursor-pointer">
+           <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20"></div>
+           <div className="relative z-10 flex flex-col h-full justify-between">
+              <div className="flex justify-between items-start">
+                 <div className="p-3 bg-emerald-500/10 rounded-xl w-fit text-emerald-400">
+                    <Map size={32} />
+                 </div>
+                 <span className="bg-emerald-500 text-black text-[10px] font-black px-2 py-1 rounded uppercase animate-pulse">
+                    Live System
+                 </span>
+              </div>
+              
+              <div className="mt-8">
+                <h2 className="text-3xl font-black text-white mb-2 group-hover:text-emerald-400 transition-colors">
+                  {isTutor ? 'Tutor Command Map' : 'Launch Student Radar'}
+                </h2>
+                <p className="text-zinc-400 max-w-md text-sm">
+                  Access the geospatial interface to find tutors, track sessions, and view AI recommendations in real-time.
+                </p>
+              </div>
+           </div>
+        </Link>
+
+
+        {/* 3. SAFETY MODULE (Small Card) */}
+        <Link href="/safety" className="md:col-span-1 bg-red-950/10 border border-red-900/30 rounded-3xl p-6 flex flex-col justify-between hover:bg-red-950/20 hover:border-red-500/50 transition-all cursor-pointer group">
+           <ShieldAlert size={32} className="text-red-500 mb-4 group-hover:scale-110 transition-transform" />
+           <div>
+             <h3 className="font-bold text-white text-lg">Safety Center</h3>
+             <p className="text-xs text-red-400 mt-1">Panic Button & Protocols</p>
+           </div>
+        </Link>
+
+
+        {/* 4. UTILITIES ROW */}
+        
+        {/* NEW: ClassRoom (QR Attendance) */}
+        <Link href="/tuition" className="md:col-span-1 bg-gradient-to-br from-zinc-900 to-zinc-950 border border-blue-500/30 rounded-3xl p-6 hover:border-blue-400 hover:shadow-[0_0_20px_rgba(59,130,246,0.15)] transition-all group">
+            <GraduationCap size={24} className="text-blue-400 mb-4 group-hover:scale-110 transition-transform" />
+            <h3 className="font-bold text-white">ClassRoom</h3>
+            <p className="text-[10px] text-zinc-500 mt-1 uppercase tracking-wider">QR Attendance & Logs</p>
+            <div className="flex items-center gap-2 text-xs text-blue-400 mt-4 group-hover:translate-x-1 transition-transform font-bold">
+               Enter Room <ChevronRight size={12}/>
+            </div>
+        </Link>
+
+        {/* Tuition Manager / Status */}
+        <Link href="/tuition-status" className="md:col-span-1 bg-zinc-900 border border-zinc-800 rounded-3xl p-6 hover:border-zinc-600 transition-all group">
+            <BookOpen size={24} className="text-purple-400 mb-4" />
+            <h3 className="font-bold">Tuition Status</h3>
+            <div className="flex items-center gap-2 text-xs text-zinc-500 mt-2 group-hover:text-white transition-colors">
+               View Logs <ChevronRight size={12}/>
+            </div>
+        </Link>
+
+        {/* Admin / Security HQ */}
+        <Link href="/admin/safety" className="md:col-span-1 bg-zinc-900 border border-zinc-800 rounded-3xl p-6 hover:border-orange-500/50 transition-all group">
+            <Siren size={24} className="text-orange-400 mb-4" />
+            <h3 className="font-bold">Admin HQ</h3>
+            <div className="flex items-center gap-2 text-xs text-zinc-500 mt-2 group-hover:text-white transition-colors">
+               Security Feed <ChevronRight size={12}/>
+            </div>
+        </Link>
+
+        {/* Tutor Specific Dashboard (Earnings, etc) */}
+        {isTutor && (
+          <Link href="/auth/dashboard" className="md:col-span-1 bg-zinc-900 border border-zinc-800 rounded-3xl p-6 hover:border-cyan-500/50 transition-all group">
+              <LayoutDashboard size={24} className="text-cyan-400 mb-4" />
+              <h3 className="font-bold">My Tuition</h3>
+              <div className="flex items-center gap-2 text-xs text-zinc-500 mt-2 group-hover:text-white transition-colors">
+                 Manage Profile <ChevronRight size={12}/>
+              </div>
+          </Link>
+        )}
+
+        {/* Presentation Deck */}
+        <Link href="/presentation" className="md:col-span-1 bg-zinc-900 border border-zinc-800 rounded-3xl p-6 hover:border-pink-500/50 transition-all group">
+            <MonitorPlay size={24} className="text-pink-400 mb-4" />
+            <h3 className="font-bold">Hackathon Deck</h3>
+            <div className="flex items-center gap-2 text-xs text-zinc-500 mt-2 group-hover:text-white transition-colors">
+               Open Slides <ChevronRight size={12}/>
+            </div>
+        </Link>
 
       </div>
-
-      <style jsx>{`
-        @keyframes progress {
-          0% { left: -100%; }
-          100% { left: 100%; }
-        }
-        .animate-progress {
-          width: 0%;
-          position: absolute;
-          animation: progress 1.5s infinite linear;
-        }
-      `}</style>
     </div>
   );
 }

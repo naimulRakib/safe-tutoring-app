@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/app/utils/supabase/client';
-import { CalendarClock, MessageSquare, X, Lock, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react'; 
+import { CalendarClock, MessageSquare, X, Lock, CheckCircle2, AlertCircle, Loader2, Zap } from 'lucide-react'; 
 import AppointmentScheduler from './chat/AppointmentScheduler';
 
 interface ChatWindowProps {
@@ -21,16 +21,16 @@ export default function ChatWindow({ currentUserId, recipientId, recipientName, 
   const [newMessage, setNewMessage] = useState('');
   const [viewMode, setViewMode] = useState<'CHAT' | 'SCHEDULE'>('CHAT');
   
-  // --- ROBUST STATE MANAGEMENT ---
+  // State
   const [activeAppId, setActiveAppId] = useState<string | null>(propAppId || null);
   const [activeRole, setActiveRole] = useState<string | null>(propRole || null);
   const [appStatus, setAppStatus] = useState<string | null>(null);
   const [apptStatus, setApptStatus] = useState<'none' | 'negotiating' | 'confirmed' | 'cancelled'>('none');
-  const [loadingContext, setLoadingContext] = useState(true); // New loading state to prevent flickering
+  const [loadingContext, setLoadingContext] = useState(true);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // 1. CONSOLIDATED AUTO-DISCOVERY (Runs once on mount)
+  // 1. INITIALIZATION & RESTORING STATE
   useEffect(() => {
     const initChat = async () => {
       setLoadingContext(true);
@@ -39,13 +39,13 @@ export default function ChatWindow({ currentUserId, recipientId, recipientName, 
       let finalRole = propRole;
       let finalAppStatus = null;
 
-      // A. Find Application ID if missing
+      // A. Auto-Discover Application ID if missing
       if (!finalAppId) {
         const { data: appData } = await supabase
           .from('applications')
           .select('id, status')
           .or(`and(sender_id.eq.${currentUserId},receiver_id.eq.${recipientId}),and(sender_id.eq.${recipientId},receiver_id.eq.${currentUserId})`)
-          .eq('status', 'accepted') // Only care about active chats
+          .eq('status', 'accepted')
           .maybeSingle();
 
         if (appData) {
@@ -53,32 +53,31 @@ export default function ChatWindow({ currentUserId, recipientId, recipientName, 
           finalAppStatus = appData.status;
         }
       } else {
-        // Refresh status if ID exists
         const { data } = await supabase.from('applications').select('status').eq('id', finalAppId).single();
         if (data) finalAppStatus = data.status;
       }
 
-      // B. Find Role if missing
+      // B. Auto-Discover Role
       if (!finalRole) {
         const { data: profile } = await supabase.from('profiles').select('role').eq('id', currentUserId).single();
         if (profile) finalRole = profile.role;
       }
 
-      // C. CRITICAL FIX: Check for Existing Appointment IMMEDIATELY
+      // C. CHECK FOR EXISTING APPOINTMENT (CRITICAL FOR PERSISTENCE)
       if (finalAppId) {
         const { data: existingAppt } = await supabase
           .from('appointments')
           .select('status')
           .eq('application_id', finalAppId)
-          .maybeSingle(); // Safe fetch
+          .neq('status', 'cancelled') // Ignore cancelled ones so we can make new ones
+          .maybeSingle();
         
         if (existingAppt) {
           console.log("✅ Restored Appointment Status:", existingAppt.status);
-          setApptStatus(existingAppt.status);
+          setApptStatus(existingAppt.status); // <--- Restores the button state
         }
       }
 
-      // D. Update State All at Once
       if (finalAppId) setActiveAppId(finalAppId);
       if (finalRole) setActiveRole(finalRole);
       if (finalAppStatus) setAppStatus(finalAppStatus);
@@ -91,7 +90,6 @@ export default function ChatWindow({ currentUserId, recipientId, recipientName, 
 
   // 2. REAL-TIME LISTENERS
   useEffect(() => {
-    // Message Fetch
     const fetchMessages = async () => {
       const { data } = await supabase
         .from('messages')
@@ -102,7 +100,6 @@ export default function ChatWindow({ currentUserId, recipientId, recipientName, 
     };
     fetchMessages();
 
-    // Message Subscription
     const msgChannel = supabase.channel(`chat:${currentUserId}-${recipientId}`) 
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
           const msg = payload.new as any;
@@ -116,14 +113,12 @@ export default function ChatWindow({ currentUserId, recipientId, recipientName, 
       )
       .subscribe();
       
-    // Appointment Status Subscription (Keeps header icon sync'd)
     let apptChannel: any;
     if (activeAppId) {
       apptChannel = supabase.channel(`appt-status-${activeAppId}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments', filter: `application_id=eq.${activeAppId}` }, 
         (payload) => {
            const newStatus = (payload.new as any).status;
-           console.log("🔄 Real-time Status Update:", newStatus);
            setApptStatus(newStatus);
         })
         .subscribe();
@@ -135,7 +130,6 @@ export default function ChatWindow({ currentUserId, recipientId, recipientName, 
     };
   }, [currentUserId, recipientId, supabase, activeAppId]);
 
-  // 3. Scroll to bottom
   useEffect(() => { 
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; 
   }, [messages, viewMode]);
@@ -146,11 +140,15 @@ export default function ChatWindow({ currentUserId, recipientId, recipientName, 
     await supabase.from('messages').insert({ sender_id: currentUserId, receiver_id: recipientId, content: text });
   };
 
+  // Helper: Should we show the schedule button?
+  // Logic: Show if we have an active appt OR if the application is accepted
+  const showScheduleButton = (activeAppId && activeRole) && (appStatus === 'accepted' || apptStatus !== 'none');
+
   const getScheduleButtonStyle = () => {
     if (viewMode === 'SCHEDULE') return 'text-emerald-400 bg-white/10 ring-1 ring-emerald-500';
     switch (apptStatus) {
       case 'confirmed': return 'text-black bg-emerald-500 hover:bg-emerald-400 animate-pulse';
-      case 'negotiating': return 'text-yellow-400 bg-yellow-400/10 border border-yellow-400/50';
+      case 'negotiating': return 'text-yellow-400 bg-yellow-400/10 border border-yellow-400/50 animate-pulse'; // Added animation for visibility
       default: return 'text-gray-400 hover:text-white hover:bg-white/10';
     }
   };
@@ -166,24 +164,22 @@ export default function ChatWindow({ currentUserId, recipientId, recipientName, 
              <span className="text-[9px] text-gray-500 animate-pulse">Syncing...</span>
           ) : (
              <>
-               {apptStatus === 'confirmed' && <span className="text-[9px] text-emerald-400 font-mono uppercase">Appointment Set</span>}
-               {apptStatus === 'negotiating' && <span className="text-[9px] text-yellow-400 font-mono uppercase">Negotiating...</span>}
+               {apptStatus === 'confirmed' && <span className="text-[9px] text-emerald-400 font-bold font-mono uppercase flex items-center gap-1"><CheckCircle2 size={10}/> APPOINTMENT SET</span>}
+               {apptStatus === 'negotiating' && <span className="text-[9px] text-yellow-400 font-bold font-mono uppercase flex items-center gap-1"><Zap size={10}/> NEGOTIATING...</span>}
              </>
           )}
         </div>
         
         <div className="flex items-center gap-2">
-          {/* Only show schedule button if Application Link is accepted */}
-          {activeAppId && activeRole && appStatus === 'accepted' ? (
+          {showScheduleButton ? (
              <button 
                onClick={() => setViewMode(viewMode === 'CHAT' ? 'SCHEDULE' : 'CHAT')}
                className={`p-1.5 rounded-lg transition-all duration-300 ${getScheduleButtonStyle()}`}
-               title={apptStatus === 'confirmed' ? "View Appointment Details" : "Schedule Appointment"}
+               title={apptStatus === 'confirmed' ? "View Appointment" : "Schedule"}
              >
                {viewMode === 'CHAT' ? <CalendarClock size={16} /> : <MessageSquare size={16} />}
              </button>
           ) : (
-            // Show lock if connection not fully accepted yet
             (!loadingContext && activeAppId) && (
                <div className="p-1.5 text-zinc-600 cursor-not-allowed" title="Connection not fully accepted">
                   <Lock size={14} />
@@ -209,14 +205,14 @@ export default function ChatWindow({ currentUserId, recipientId, recipientName, 
         <>
           <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 bg-black relative">
             
-            {/* STICKY BANNERS (Restore context when re-opening) */}
+            {/* STICKY BANNERS - Always visible if status exists */}
             {apptStatus === 'negotiating' && (
               <div 
                 onClick={() => setViewMode('SCHEDULE')}
-                className="bg-yellow-900/20 border border-yellow-500/30 p-2 rounded-lg flex items-center gap-2 cursor-pointer hover:bg-yellow-900/30 transition-colors mb-4 animate-in fade-in slide-in-from-top-2"
+                className="bg-yellow-900/20 border border-yellow-500/30 p-2 rounded-lg flex items-center gap-2 cursor-pointer hover:bg-yellow-900/30 transition-colors mb-4 animate-in fade-in slide-in-from-top-2 group"
               >
-                <AlertCircle size={14} className="text-yellow-500" />
-                <span className="text-[10px] text-yellow-200 font-bold">Proposal Active. Click to Resume.</span>
+                <AlertCircle size={14} className="text-yellow-500 group-hover:animate-bounce" />
+                <span className="text-[10px] text-yellow-200 font-bold">Negotiation in progress. Tap to view.</span>
               </div>
             )}
             
@@ -230,7 +226,6 @@ export default function ChatWindow({ currentUserId, recipientId, recipientName, 
               </div>
             )}
 
-            {/* Messages */}
             {messages.length === 0 && <div className="text-center text-zinc-600 text-xs mt-10">Start chatting with {recipientName}...</div>}
             
             {messages.map((msg) => (
@@ -246,7 +241,6 @@ export default function ChatWindow({ currentUserId, recipientId, recipientName, 
             ))}
           </div>
           
-          {/* Input Area */}
           <div className="p-3 border-t border-white/10 bg-zinc-900 flex gap-2">
             <input 
               value={newMessage} 

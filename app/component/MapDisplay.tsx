@@ -10,7 +10,7 @@ import { createClient } from '@/app/utils/supabase/client';
 
 // --- IMPORTS FROM COMPONENTS ---
 import { tutorIcon, studentIcon, verifiedTutorIcon, calculateDistributedPoints } from './map/MapUtils';
-import RadarSidebar from './map/RadarSide'; // Ensure this path is correct
+import RadarSidebar from './map/RadarSide';// Ensure this path is correct
 
 const TILE_URL = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
 
@@ -25,13 +25,13 @@ const MapController = ({ center, zoom }: { center: [number, number], zoom: numbe
 interface MapDisplayProps {
   myRole: string; 
   highlightedUsers?: any[] | null; 
- currentUserLocation?: any | null;
+  currentUserLocation?: any | null;
   onLocationFound?: (loc: { lat: number; lng: number }) => void;
   // Make sure this matches what you pass from the parent
   onContactUser?: (user: any) => void; 
 }
 
-const MapDisplay: FC<MapDisplayProps> = ({ myRole, highlightedUsers, onLocationFound, onContactUser }) => {
+const MapDisplay: FC<MapDisplayProps> = ({ myRole, highlightedUsers, onLocationFound, onContactUser, currentUserLocation }) => {
   const supabase = createClient();
   const [sessionUserId, setSessionUserId] = useState<string | null>(null);
   const [userLoc, setUserLoc] = useState<[number, number] | null>(null);
@@ -47,9 +47,29 @@ const MapDisplay: FC<MapDisplayProps> = ({ myRole, highlightedUsers, onLocationF
     supabase.auth.getUser().then(({ data }) => { if(data.user) setSessionUserId(data.user.id); });
   }, [supabase]);
 
+  // 👇👇👇 SYNC WITH PARENT (DASHBOARD) 👇👇👇
+  // If Dashboard sends strictly filtered users, use them immediately
+  // This OVERRIDES any internal fetching logic.
+  useEffect(() => {
+    if (highlightedUsers && highlightedUsers.length > 0) {
+        setAllFetchedData(highlightedUsers);
+        
+        // Auto Center on first match if valid
+        const valid = highlightedUsers.find(u => (u.lat || u.latitude) && (u.lng || u.longitude));
+        if (valid && !userLoc) {
+            setMapCenter([valid.lat || valid.latitude, valid.lng || valid.longitude]);
+        }
+    }
+  }, [highlightedUsers, userLoc]);
+
+
   // --- 1. CORE RADAR LOGIC (HANDLES BOTH) ---
   const syncRadar = useCallback(async (lat: number, lng: number) => {
     if (!sessionUserId) return;
+    
+    // 🛑 Optimization: If highlightedUsers is provided by parent, DO NOT fetch internally.
+    if (highlightedUsers && highlightedUsers.length > 0) return;
+
     try {
       let data: any[] = [];
       let areaToSearch = "Dhaka"; 
@@ -98,7 +118,7 @@ const MapDisplay: FC<MapDisplayProps> = ({ myRole, highlightedUsers, onLocationF
         if (!userLoc && validGPS) setMapCenter([validGPS.lat, validGPS.lng]);
       }
     } catch (err) { console.error("Radar Error:", err); }
-  }, [myRole, sessionUserId, supabase, userLoc]);
+  }, [myRole, sessionUserId, supabase, userLoc, highlightedUsers]); // Added highlightedUsers to dependency
 
   // --- 2. AUTO START ---
   // (Optional: You can add an useEffect here to call syncRadar on mount if userLoc is known)
@@ -115,23 +135,29 @@ const MapDisplay: FC<MapDisplayProps> = ({ myRole, highlightedUsers, onLocationF
          filtered = filtered.filter(u => u.match_score > 40);
       }
       filtered.sort((a, b) => b.match_score - a.match_score);
-    } else {
-      filtered.sort((a, b) => (a.match_type === 'PRIMARY' ? -1 : 1));
+    } 
+
+    // B. Split Lists (Respect Dashboard Ranks if available)
+    const primary = filtered.filter(u => u.match_type === 'PRIMARY' || u.match_rank === 1 || u.match_rank === 2);
+    const optional = filtered.filter(u => u.match_type === 'OPTIONAL' || u.match_rank === 3);
+
+    // If no ranks (fallback to old logic), use generic splitting
+    if (primary.length === 0 && optional.length === 0) {
+        // Fallback for old data or simple GPS search
+        return { displayMarkers: [], primaryList: filtered, optionalList: [] };
     }
 
-    // B. Split Lists
-    const primary = filtered.filter(u => u.match_type === 'PRIMARY');
-    const optional = filtered.filter(u => u.match_type === 'OPTIONAL');
-
     // C. Map Logic (Only Valid GPS)
-    const mappable = filtered.filter(u => u.lat && u.lng);
+    const mappable = filtered.filter(u => (u.lat || u.latitude) && (u.lng || u.longitude));
     const groups: Record<string, any[]> = {};
     const finalMarkers: any[] = [];
 
     mappable.forEach(u => {
-      const key = `${u.lat}-${u.lng}`;
+      const lat = u.lat || u.latitude;
+      const lng = u.lng || u.longitude;
+      const key = `${lat}-${lng}`;
       if (!groups[key]) groups[key] = [];
-      groups[key].push(u);
+      groups[key].push({ ...u, lat, lng });
     });
 
     Object.values(groups).forEach(group => {
