@@ -5,8 +5,6 @@ import { createClient } from '@/app/utils/supabase/client';
 import { Siren, Phone, MapPin, Activity } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
-// 👇 DYNAMICALLY IMPORT THE MAP COMPONENT (Disable SSR)
-// This fixes the "window is not defined" and hook errors
 const SafetyMap = dynamic(() => import('../safety/SafetyMap'), { 
   ssr: false,
   loading: () => <div className="h-full w-full flex items-center justify-center bg-zinc-900 text-emerald-500 font-mono animate-pulse">INITIALIZING SATELLITE UPLINK...</div>
@@ -18,20 +16,65 @@ export default function AdminSafetyPage() {
   const [loading, setLoading] = useState(true);
 
   const fetchData = async () => {
-    const { data, error } = await supabase
+    // 1. Fetch RAW Alerts (No Join)
+    const { data: alertsData, error: alertsError } = await supabase
       .from('safety_alerts')
-      .select(`
-        *,
-        tutor:tutors!user_id (
-          basic_info,
-          emergency_contacts
-        )
-      `)
+      .select('*')
       .eq('status', 'active')
       .order('created_at', { ascending: false });
 
-    if (error) console.error("DB Error:", error);
-    if (data) setAlerts(data);
+    if (alertsError) {
+      console.error("DB Error:", alertsError);
+      setLoading(false);
+      return;
+    }
+
+    if (!alertsData || alertsData.length === 0) {
+      setAlerts([]);
+      setLoading(false);
+      return;
+    }
+
+    // 2. Manually Fetch Tutor Details (Application-Side Join)
+    // We collect all the User IDs from the alerts
+    const userIds = alertsData.map((a: any) => a.user_id).filter(Boolean);
+    
+    let tutorsMap: Record<string, any> = {};
+
+    if (userIds.length > 0) {
+      // Fetch only the tutors that match these IDs
+      const { data: tutorsData } = await supabase
+        .from('tutors')
+        .select('id, basic_info, emergency_contacts')
+        .in('id', userIds);
+
+      // Create a quick lookup map
+      if (tutorsData) {
+        tutorsData.forEach((t: any) => {
+          tutorsMap[t.id] = t;
+        });
+      }
+    }
+
+    // 3. Merge the Data
+    const mergedData = alertsData.map((alert: any) => {
+      // Try to find the real tutor profile
+      const realProfile = tutorsMap[alert.user_id];
+
+      return {
+        ...alert,
+        // If real profile exists, use it. If not (Ghost ID), use Mock Data.
+        tutor: realProfile || {
+          basic_info: JSON.stringify({ full_name: "Unknown / Ghost ID" }),
+          emergency_contacts: JSON.stringify({ 
+            father: { phone: "N/A" }, 
+            mother: { phone: "N/A" } 
+          })
+        }
+      };
+    });
+
+    setAlerts(mergedData);
     setLoading(false);
   };
 
@@ -66,8 +109,14 @@ export default function AdminSafetyPage() {
         ) : (
           <div className="flex-1 p-4 space-y-4">
             {alerts.map((alert) => {
-              const info = typeof alert.tutor?.basic_info === 'string' ? JSON.parse(alert.tutor.basic_info) : alert.tutor?.basic_info;
-              const contacts = typeof alert.tutor?.emergency_contacts === 'string' ? JSON.parse(alert.tutor.emergency_contacts) : alert.tutor?.emergency_contacts;
+              // Safe parsing for both Real and Mock data
+              const info = typeof alert.tutor?.basic_info === 'string' 
+                ? JSON.parse(alert.tutor.basic_info) 
+                : alert.tutor?.basic_info;
+                
+              const contacts = typeof alert.tutor?.emergency_contacts === 'string' 
+                ? JSON.parse(alert.tutor.emergency_contacts) 
+                : alert.tutor?.emergency_contacts;
 
               return (
                 <div key={alert.id} className="p-6 bg-zinc-900/50 rounded-3xl border border-red-500/30 hover:bg-zinc-900 transition-all cursor-crosshair">
@@ -95,7 +144,7 @@ export default function AdminSafetyPage() {
         )}
       </div>
 
-      {/* 2. RIGHT SIDE: THE MAP HQ (Loaded Dynamically) */}
+      {/* 2. RIGHT SIDE: THE MAP HQ */}
       <div className="flex-1 relative">
         <SafetyMap alerts={alerts} />
 
