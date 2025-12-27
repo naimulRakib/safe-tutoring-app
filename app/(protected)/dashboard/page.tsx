@@ -141,7 +141,7 @@ export default function DashboardHome() {
             <span className="text-sm text-yellow-500 mb-2 font-bold">Needs Action</span>
           </div>
           <div className="mt-4">
-             <Link href={isTutor ? "/tutor/dashboard" : "/contract"} className="text-xs border border-zinc-700 text-zinc-300 px-4 py-2 rounded-full font-bold hover:bg-zinc-800 transition-colors">
+             <Link href={isTutor ? "/auth/dashboard" : "/contract"} className="text-xs border border-zinc-700 text-zinc-300 px-4 py-2 rounded-full font-bold hover:bg-zinc-800 transition-colors">
               View Inbox
             </Link>
           </div>
@@ -186,7 +186,7 @@ export default function DashboardHome() {
         {/* 4. UTILITIES ROW */}
         
         {/* NEW: ClassRoom (QR Attendance) */}
-        <Link href="/tuition" className="md:col-span-1 bg-gradient-to-br from-zinc-900 to-zinc-950 border border-blue-500/30 rounded-3xl p-6 hover:border-blue-400 hover:shadow-[0_0_20px_rgba(59,130,246,0.15)] transition-all group">
+        <Link href="/classroom" className="md:col-span-1 bg-gradient-to-br from-zinc-900 to-zinc-950 border border-blue-500/30 rounded-3xl p-6 hover:border-blue-400 hover:shadow-[0_0_20px_rgba(59,130,246,0.15)] transition-all group">
             <GraduationCap size={24} className="text-blue-400 mb-4 group-hover:scale-110 transition-transform" />
             <h3 className="font-bold text-white">ClassRoom</h3>
             <p className="text-[10px] text-zinc-500 mt-1 uppercase tracking-wider">QR Attendance & Logs</p>
