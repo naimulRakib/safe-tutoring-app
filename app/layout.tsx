@@ -5,8 +5,8 @@ import "./globals.css"; // This imports your Tailwind styles
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Twisted.ai",
-  description: "Anonymous messaging prototype",
+  title: "Scholar-Grid : Home Education OS",
+  description: "A Hackjam prototype",
 };
 
 export default function RootLayout({
