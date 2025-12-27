@@ -399,7 +399,7 @@ export default function ProfileAdvanced({ onClose, role: propRole }: ProfileAdva
 
           <section className="bg-zinc-900/50 p-4 rounded-lg border border-zinc-800">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xs font-bold text-yellow-500 flex items-center gap-2"><Package size={14}/> CUSTOM COURSE OFFER</h3>
+              <h3 className="text-xs font-bold text-yellow-500 flex items-center gap-2"><Package size={14}/> CUSTOM/ Grouping COURSE OFFER</h3>
               <label className="relative inline-flex items-center cursor-pointer">
                 <input type="checkbox" checked={studentCourse.active} onChange={e => setStudentCourse({...studentCourse, active: e.target.checked})} className="sr-only peer" />
                 <div className="w-9 h-5 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:bg-yellow-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>

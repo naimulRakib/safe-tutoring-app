@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@/app/utils/supabase/client';
+import { ShieldCheck, MessageSquare, Loader2, UserCircle2 } from 'lucide-react';
+import Link from 'next/link';
 
 interface InboxProps {
   currentUserId: string;
@@ -17,7 +19,7 @@ export default function Inbox({ currentUserId, onSelectUser, onClose }: InboxPro
   useEffect(() => {
     async function fetchInbox() {
       try {
-        // 1. Get ALL messages sent or received by me
+        // 1. Get Messages
         const { data: messages, error } = await supabase
           .from('messages')
           .select(`
@@ -30,26 +32,65 @@ export default function Inbox({ currentUserId, onSelectUser, onClose }: InboxPro
 
         if (error) throw error;
 
-        // 2. Group by Conversation Partner (The "Other Person")
+        // 2. Group by User
         const uniqueUsersMap = new Map();
+        const userIdsToCheck: string[] = [];
 
         messages?.forEach((msg: any) => {
-          // Determine who is the "Other" person
           const isSenderMe = msg.sender_id === currentUserId;
           const otherId = isSenderMe ? msg.receiver_id : msg.sender_id;
           const otherName = isSenderMe ? msg.receiver?.username : msg.sender?.username;
 
-          // Only keep the FIRST (latest) message we find for this person
           if (!uniqueUsersMap.has(otherId)) {
             uniqueUsersMap.set(otherId, {
               id: otherId,
               name: otherName || 'Unknown',
               lastMessage: msg.content,
               time: new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              isMeLast: isSenderMe
+              isMeLast: isSenderMe,
+              // Will be populated below
+              hasAcceptedApp: false, 
+              role: 'user' // Default
             });
+            userIdsToCheck.push(otherId);
           }
         });
+
+        // 3. CHECK APPLICATION STATUS & ROLE for all these users
+        if (userIdsToCheck.length > 0) {
+          // A. Check Applications (Is it accepted?)
+          const { data: apps } = await supabase
+            .from('applications')
+            .select('sender_id, receiver_id, status')
+            .or(`sender_id.in.(${userIdsToCheck.join(',')}),receiver_id.in.(${userIdsToCheck.join(',')})`)
+            .eq('status', 'accepted'); // Only care about accepted ones
+
+          // B. Check Roles (Is it a student?)
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, role')
+            .in('id', userIdsToCheck);
+
+          // C. Merge Data back into map
+          userIdsToCheck.forEach(uid => {
+            const conversation = uniqueUsersMap.get(uid);
+            
+            // Check if ANY app exists where this user is involved with ME and is ACCEPTED
+            const isAccepted = apps?.some(a => 
+              (a.sender_id === uid && a.receiver_id === currentUserId) || 
+              (a.sender_id === currentUserId && a.receiver_id === uid)
+            );
+
+            // Get Role
+            const profile = profiles?.find(p => p.id === uid);
+
+            if (conversation) {
+              conversation.hasAcceptedApp = !!isAccepted;
+              conversation.role = profile?.role || 'user';
+              uniqueUsersMap.set(uid, conversation);
+            }
+          });
+        }
 
         setConversations(Array.from(uniqueUsersMap.values()));
 
@@ -64,39 +105,81 @@ export default function Inbox({ currentUserId, onSelectUser, onClose }: InboxPro
   }, [currentUserId, supabase]);
 
   return (
-    <div className="absolute top-20 right-4 z-[450] w-80 max-h-[60vh] bg-black/95 border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in slide-in-from-right-10 fade-in">
+    <div className="absolute top-20 right-4 z-[450] w-96 max-h-[70vh] bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in slide-in-from-right-10 fade-in font-sans">
       
       {/* Header */}
-      <div className="p-4 border-b border-white/10 bg-white/5 flex justify-between items-center">
-        <h3 className="font-bold text-white tracking-wider text-sm">SECURE INBOX</h3>
-        <button onClick={onClose} className="text-gray-400 hover:text-white">✕</button>
+      <div className="p-4 border-b border-zinc-800 bg-zinc-900/50 backdrop-blur-md flex justify-between items-center">
+        <div>
+          <h3 className="font-black text-white tracking-widest text-xs uppercase flex items-center gap-2">
+            <MessageSquare size={14} className="text-emerald-500" /> Secure Inbox
+          </h3>
+        </div>
+        <button onClick={onClose} className="text-zinc-500 hover:text-white transition-colors">✕</button>
       </div>
 
       {/* List */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto custom-scrollbar">
         {loading ? (
-          <div className="p-4 text-center text-xs text-gray-500 animate-pulse">Decryption in progress...</div>
+          <div className="p-8 text-center flex flex-col items-center gap-2">
+            <Loader2 className="animate-spin text-emerald-500" size={20} />
+            <span className="text-[10px] text-zinc-500 font-mono uppercase">Decrypting...</span>
+          </div>
         ) : conversations.length === 0 ? (
-          <div className="p-8 text-center text-gray-600 text-xs">No active comms channels.</div>
+          <div className="p-10 text-center border-dashed border border-zinc-800 m-4 rounded-xl">
+            <p className="text-zinc-600 text-xs font-bold">No active frequencies.</p>
+          </div>
         ) : (
           conversations.map((chat) => (
             <div 
               key={chat.id}
-              onClick={() => onSelectUser({ id: chat.id, name: chat.name })}
-              className="p-4 border-b border-white/5 hover:bg-white/10 cursor-pointer transition-colors group"
+              className="p-4 border-b border-zinc-800/50 hover:bg-zinc-900 transition-colors group relative"
             >
-              <div className="flex justify-between items-baseline mb-1">
-                <span className="font-bold text-emerald-400 text-sm">@{chat.name}</span>
-                <span className="text-[10px] text-gray-500 font-mono">{chat.time}</span>
+              <div className="flex justify-between items-start mb-2">
+                <div className="flex items-center gap-3">
+                   <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-400 border border-zinc-700">
+                      <UserCircle2 size={20} />
+                   </div>
+                   <div 
+                     onClick={() => onSelectUser({ id: chat.id, name: chat.name })}
+                     className="cursor-pointer"
+                   >
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-white text-sm hover:underline">{chat.name}</span>
+                        {chat.role && <span className="text-[9px] bg-zinc-800 text-zinc-500 px-1.5 py-0.5 rounded uppercase">{chat.role}</span>}
+                      </div>
+                      <p className="text-xs text-zinc-400 truncate w-40 mt-0.5">
+                        <span className="text-zinc-600">{chat.isMeLast ? 'You: ' : ''}</span>
+                        {chat.lastMessage}
+                      </p>
+                   </div>
+                </div>
+
+                <div className="flex flex-col items-end gap-2">
+                  <span className="text-[10px] text-zinc-600 font-mono">{chat.time}</span>
+                  
+                  {/* --- PROFILE LINK LOGIC --- */}
+                  {/* Only show if App is Accepted AND target is a Student */}
+                  {chat.hasAcceptedApp && chat.role === 'student' && (
+                    <Link 
+                      href={`/studentprofile/${chat.id}`}
+                      className="text-emerald-500 hover:text-emerald-400 hover:scale-110 transition-transform p-1"
+                      title="View Verified Profile"
+                    >
+                      <ShieldCheck size={16} />
+                    </Link>
+                  )}
+                </div>
               </div>
-              <p className="text-xs text-gray-300 truncate group-hover:text-white transition-colors">
-                <span className="text-gray-500">{chat.isMeLast ? 'You: ' : ''}</span>
-                {chat.lastMessage}
-              </p>
             </div>
           ))
         )}
       </div>
+      
+      <style jsx>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #09090b; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #27272a; border-radius: 4px; }
+      `}</style>
     </div>
   );
 }

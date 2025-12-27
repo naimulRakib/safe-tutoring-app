@@ -2,35 +2,38 @@
 
 import React, { useState } from 'react';
 import { createClient } from '@/app/utils/supabase/client';
-import { Star, AlertTriangle, X, Loader2, CheckCircle } from 'lucide-react';
+import { Star, AlertTriangle, X, Loader2, CheckCircle, User, GraduationCap } from 'lucide-react';
 
 interface ReviewModalProps {
-  appointmentId: string; // Changed from contractId
+  appointmentId: string;
   reviewerId: string;
   revieweeId: string;
-  role: 'student' | 'tutor';
+  role: 'student' | 'tutor'; // This is the role of the REVIEWER (Me)
   onClose: () => void;
   onSuccess: () => void;
 }
 
 export default function ReviewModal({ appointmentId, reviewerId, revieweeId, role, onClose, onSuccess }: ReviewModalProps) {
   const supabase = createClient();
-  const [rating, setRating] = useState(10);
+  const [rating, setRating] = useState(5); // Default 5 Stars
+  const [hoverRating, setHoverRating] = useState(0);
   const [comment, setComment] = useState('');
   const [isStrike, setIsStrike] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const isTutorReviewing = role === 'tutor'; // Am I a Tutor?
 
   const handleSubmit = async () => {
     if (!comment.trim()) return alert("Please write a short review.");
     setLoading(true);
 
     const { error } = await supabase.from('reviews').insert({
-      appointment_id: appointmentId, // storing the appointment link
+      appointment_id: appointmentId,
       reviewer_id: reviewerId,
       reviewee_id: revieweeId,
       rating: rating,
       comment: comment,
-      is_strike: role === 'tutor' ? isStrike : false
+      is_strike: isTutorReviewing ? isStrike : false // Only tutors can strike
     });
 
     setLoading(false);
@@ -46,55 +49,90 @@ export default function ReviewModal({ appointmentId, reviewerId, revieweeId, rol
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="bg-zinc-900 border border-zinc-800 w-full max-w-md rounded-2xl p-6 shadow-2xl animate-in zoom-in-95">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
+      <div className="bg-zinc-900 border border-zinc-800 w-full max-w-md rounded-[2rem] p-8 shadow-2xl relative overflow-hidden">
         
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-black text-white uppercase tracking-wider">
-            {role === 'student' ? 'Rate Demo Class' : 'Student Report'}
-          </h2>
-          <button onClick={onClose} className="p-2 hover:bg-zinc-800 rounded-full text-zinc-400">
+        {/* Glow Effect */}
+        <div className={`absolute top-0 left-0 w-full h-1 ${isTutorReviewing ? 'bg-emerald-500' : 'bg-cyan-500'} shadow-[0_0_20px_currentColor]`} />
+
+        {/* Header */}
+        <div className="flex justify-between items-start mb-8">
+          <div>
+            <div className={`flex items-center gap-2 text-xs font-black uppercase tracking-widest mb-1 ${isTutorReviewing ? 'text-emerald-500' : 'text-cyan-500'}`}>
+              {isTutorReviewing ? <GraduationCap size={14}/> : <User size={14}/>}
+              {isTutorReviewing ? 'Tutor Protocol' : 'Student Feedback'}
+            </div>
+            <h2 className="text-2xl font-black text-white uppercase tracking-tighter">
+              {isTutorReviewing ? 'Evaluate Student' : 'Rate Your Tutor'}
+            </h2>
+          </div>
+          <button onClick={onClose} className="p-2 bg-zinc-800 hover:bg-zinc-700 rounded-full text-zinc-400 transition-colors">
             <X size={20} />
           </button>
         </div>
 
-        {/* Rating Slider */}
-        <div className="mb-6 text-center bg-black/30 p-4 rounded-xl border border-zinc-800">
-          <div className="text-5xl font-black text-emerald-500 mb-2 flex justify-center items-center gap-2">
-            {rating}<span className="text-lg text-zinc-600">/10</span>
+        {/* Interactive Star Rating */}
+        <div className="mb-8 text-center">
+          <div className="flex justify-center gap-2 mb-2">
+            {[1, 2, 3, 4, 5].map((star) => (
+              <button
+                key={star}
+                onMouseEnter={() => setHoverRating(star)}
+                onMouseLeave={() => setHoverRating(0)}
+                onClick={() => setRating(star)}
+                className="transition-transform hover:scale-110 focus:outline-none"
+              >
+                <Star 
+                  size={32} 
+                  className={`${(hoverRating || rating) >= star ? 'fill-yellow-400 text-yellow-400' : 'text-zinc-700'} transition-colors`} 
+                />
+              </button>
+            ))}
           </div>
-          <input 
-            type="range" min="1" max="10" value={rating} 
-            onChange={(e) => setRating(parseInt(e.target.value))}
-            className="w-full accent-emerald-500 h-2 bg-zinc-700 rounded-lg appearance-none cursor-pointer"
+          <p className="text-zinc-500 text-xs font-mono uppercase tracking-widest">
+            {rating === 5 ? "Excellent Performance" : rating === 1 ? "Poor Performance" : `${rating} Star Rating`}
+          </p>
+        </div>
+
+        {/* Comment Box */}
+        <div className="mb-6">
+          <textarea 
+            className="w-full h-32 bg-black/50 border border-zinc-700 rounded-2xl p-4 text-sm text-white focus:border-zinc-500 outline-none resize-none transition-all placeholder:text-zinc-600"
+            placeholder={isTutorReviewing ? "Was the student punctual? Did they pay on time?" : "How was the teaching style? Was the concept clear?"}
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
           />
-          <div className="flex justify-between text-[10px] text-zinc-500 mt-2 font-bold uppercase tracking-widest">
-            <span>Poor</span><span>Excellent</span>
-          </div>
         </div>
 
         {/* Strike Toggle (Tutor Only) */}
-        {role === 'tutor' && (
-          <div onClick={() => setIsStrike(!isStrike)} className={`mb-6 p-4 rounded-xl border cursor-pointer transition-all flex items-center gap-3 ${isStrike ? 'bg-red-900/20 border-red-500' : 'bg-zinc-800/50 border-zinc-700'}`}>
-            <AlertTriangle size={18} className={isStrike ? "text-red-500" : "text-zinc-500"} />
-            <div>
-              <p className={`text-sm font-bold ${isStrike ? 'text-red-400' : 'text-zinc-300'}`}>Issue a Strike?</p>
-              <p className="text-[10px] text-zinc-500 leading-tight">Flag for non-payment or bad behavior.</p>
+        {isTutorReviewing && (
+          <div 
+            onClick={() => setIsStrike(!isStrike)} 
+            className={`mb-6 p-4 rounded-xl border cursor-pointer transition-all flex items-center gap-4 group ${isStrike ? 'bg-red-900/10 border-red-500/50' : 'bg-zinc-800/30 border-zinc-800 hover:border-zinc-700'}`}
+          >
+            <div className={`p-2 rounded-full ${isStrike ? 'bg-red-500 text-black' : 'bg-zinc-800 text-zinc-500'}`}>
+              <AlertTriangle size={18} />
             </div>
-            {isStrike && <CheckCircle className="ml-auto text-red-500" size={20} />}
+            <div className="flex-1">
+              <p className={`text-sm font-bold ${isStrike ? 'text-red-400' : 'text-zinc-300'}`}>Issue Formal Strike</p>
+              <p className="text-[10px] text-zinc-500 leading-tight mt-0.5">Flag this student for non-payment or abusive behavior.</p>
+            </div>
+            {isStrike && <CheckCircle className="text-red-500 animate-in zoom-in" size={20} />}
           </div>
         )}
 
-        <textarea 
-          className="w-full h-28 bg-black border border-zinc-700 rounded-xl p-4 text-sm text-white focus:border-emerald-500 outline-none resize-none mb-4"
-          placeholder="Write your review here..."
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-        />
-
-        <button onClick={handleSubmit} disabled={loading} className="w-full bg-white text-black font-bold py-4 rounded-xl hover:bg-zinc-200 transition-all flex items-center justify-center gap-2">
-          {loading ? <Loader2 className="animate-spin" size={18} /> : <Star size={18} className="fill-black" />}
-          SUBMIT REVIEW
+        {/* Submit Button */}
+        <button 
+          onClick={handleSubmit} 
+          disabled={loading} 
+          className={`w-full font-black py-4 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed
+            ${isTutorReviewing ? 'bg-emerald-500 hover:bg-emerald-400 text-black' : 'bg-cyan-500 hover:bg-cyan-400 text-black'}`}
+        >
+          {loading ? (
+            <Loader2 className="animate-spin" size={18} />
+          ) : (
+            <>SUBMIT EVALUATION <CheckCircle size={18} /></>
+          )}
         </button>
 
       </div>
