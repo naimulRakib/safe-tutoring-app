@@ -264,6 +264,17 @@ export default function DashboardHome() {
               <p className="text-[10px] text-zinc-500 mt-1 uppercase tracking-wider">Hackathon Slides</p>
             </div>
         </Link>
+                {/* Tutor Specific Dashboard (Earnings, etc) */}
+        
+          <Link href="/group-tutoring" className="md:col-span-1 bg-zinc-900 border border-zinc-800 rounded-3xl p-6 hover:border-emerald-500/50 transition-all group flex flex-col justify-between h-40">
+              <LayoutDashboard size={24} className="text-emerald-400 group-hover:scale-110 transition-transform" />
+              <div>
+                <h3 className="font-bold">Neighbourhood (Pro)</h3>
+                <p className="text-[10px] text-zinc-500 mt-1 uppercase tracking-wider">Manage Revenue</p>
+              </div>
+          </Link>
+        
+
 
       </div>
     </div>
